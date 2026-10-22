@@ -30,7 +30,9 @@ export class AudioSfx {
         const data = this.noiseBuffer.getChannelData(0);
         for (let i = 0; i < length; i += 1) data[i] = (Math.random() * 2 - 1) * 0.5;
       }
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      // .catch matters: a rejected resume() escapes the surrounding try as an
+      // unhandled rejection and trips the error hooks.
+      if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined);
       if (this.feverOn) this.startFeverBed(); // context arrived after fever
     } catch {
       /* audio unavailable */

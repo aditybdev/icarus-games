@@ -3,6 +3,7 @@
  * camera, save data, and host-platform integration.
  */
 import type { Platform } from '@icarus/platform';
+import { haptics, osPrefersReducedMotion } from '@icarus/platform';
 import { AudioFx } from './audio';
 import { LegInput } from './input';
 import { Renderer } from './render/renderer';
@@ -75,6 +76,8 @@ export class Game {
   private finalStretchShown = false;
   private penaltyChipT = 0;
   private toastT = 0;
+  /** True when the user opened the pause overlay (vs. a host/visibility pause). */
+  private manualPaused = false;
 
   constructor(private platform: Platform) {
     const canvas = $('scene') as HTMLCanvasElement;
@@ -87,6 +90,11 @@ export class Game {
   async init(): Promise<void> {
     this.save = await this.platform.load<SaveData>({ ...DEFAULT_SAVE });
     if (this.save.v !== 1) this.save = { ...DEFAULT_SAVE };
+    // Reduced motion defaults to the OS preference until the user overrides
+    // it in settings (undefined = never touched the toggle).
+    if (this.save.reducedMotion === undefined) {
+      this.save.reducedMotion = osPrefersReducedMotion();
+    }
     // Sanitize persisted fields: a corrupt bestTimeMs (wrong type / non-finite)
     // would make `eff < bestTimeMs` permanently false and block all future
     // best-time saves.
@@ -126,8 +134,14 @@ export class Game {
     click('btn-train', () => this.startRun('training'));
     click('btn-retry', () => this.startRun(this.sim.mode, true));
     click('btn-results-menu', () => this.showTitle());
-    click('btn-pause', () => this.setPaused(true));
-    click('btn-resume', () => this.setPaused(false));
+    click('btn-pause', () => {
+      this.manualPaused = true;
+      this.setPaused(true);
+    });
+    click('btn-resume', () => {
+      this.manualPaused = false;
+      this.setPaused(false);
+    });
     click('btn-pause-restart', () => this.startRun(this.sim.mode, true));
     click('btn-pause-menu', () => this.showTitle());
     click('btn-settings', () => this.openSettings());
@@ -191,6 +205,7 @@ export class Game {
     this.sim = createSim('training', 3);
     this.sim.body.x = 1.6;
     for (let i = 0; i < 4; i++) this.sim.legs[i].plantX = this.sim.body.x + [0.34, 0.3, -0.3, -0.34][i];
+    this.manualPaused = false;
     this.camX = 0;
     this.input.releaseAll();
     this.audio.setPaused(false);
@@ -201,6 +216,7 @@ export class Game {
   private startRun(mode: GameMode, quick = false): void {
     this.seedCounter = (this.seedCounter * 1103515245 + 12345) & 0x7fffffff;
     this.sim = createSim(mode, this.seedCounter || 1);
+    this.manualPaused = false;
     this.camX = 0;
     this.shake = 0;
     this.acc = 0;
@@ -253,6 +269,11 @@ export class Game {
 
   pause(): void {
     this.setPaused(true);
+  }
+
+  /** True while the pause overlay came from the user, not the host. */
+  get isManualPause(): boolean {
+    return this.manualPaused && this.ui === 'paused';
   }
 
   // --------------------------------------------------------------- loop
@@ -320,11 +341,7 @@ export class Game {
   /** Haptics: touch devices only (body.touch is set by input.ts). */
   private vibrate(pattern: number | number[]): void {
     if (!document.body.classList.contains('touch')) return;
-    try {
-      navigator.vibrate?.(pattern);
-    } catch {
-      /* vibration unsupported / blocked */
-    }
+    haptics(pattern);
   }
 
   /**

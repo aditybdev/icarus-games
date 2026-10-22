@@ -4,6 +4,7 @@
  */
 
 import type { Platform } from '@icarus/platform';
+import { haptics } from '@icarus/platform';
 import { AudioFx } from './audio';
 import { Confetti } from './confetti';
 import {
@@ -49,15 +50,6 @@ const FOLD_ANIM_MS_REDUCED = 200;
 const INTRO_MS = 320;
 
 type Screen = 'title' | 'levels' | 'puzzle' | 'gallery';
-
-/** Guarded haptics: no-op where the Vibration API is missing (desktop/iOS). */
-function vibrate(pattern: number | number[]): void {
-  try {
-    navigator.vibrate?.(pattern);
-  } catch {
-    // Some webviews throw on vibrate; haptics are best-effort only.
-  }
-}
 
 interface ActiveAnim {
   line: Line;
@@ -340,7 +332,7 @@ export class Game {
     this.history.push(this.state);
     this.state = fold(this.state, anim.line, anim.side);
     this.moves.push({ creaseId: anim.creaseId, side: anim.side });
-    vibrate(8); // tactile tick for a committed fold
+    haptics(8); // tactile tick for a committed fold
     this.updateHud();
 
     // Compute the precise 0–1 silhouette distance once (same cost as the old
@@ -463,7 +455,7 @@ export class Game {
     void this.platform.save(this.save);
     this.platform.sendScore(totalStars(this.save));
     this.audio.chime(stars);
-    vibrate([20, 40, 20]); // gentle double-tap celebration pulse
+    haptics([20, 40, 20]); // gentle double-tap celebration pulse
     if (stars === 3) this.confetti.burst(performance.now(), this.cssW);
     const streak = flawlessStreak(this.save.stars, this.levelIndex);
     const hasNext = this.levelIndex + 1 < LEVELS.length;

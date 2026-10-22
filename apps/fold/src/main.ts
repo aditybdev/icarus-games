@@ -3,17 +3,12 @@
  * wires lifecycle + error reporting.
  */
 
-import { createPlatform } from '@icarus/platform';
+import { createPlatform, installErrorHooks } from '@icarus/platform';
 import { Game } from './game';
 
 const platform = createPlatform('fold');
 
-window.addEventListener('error', (e) => {
-  platform.reportError('fold', e.error ?? e.message);
-});
-window.addEventListener('unhandledrejection', (e) => {
-  platform.reportError('fold', e.reason);
-});
+installErrorHooks(platform, 'fold');
 
 const game = new Game(platform);
 

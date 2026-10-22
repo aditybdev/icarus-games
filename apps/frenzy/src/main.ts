@@ -2,23 +2,20 @@
  * Four-Leg Frenzy — entry point. All host access goes through the platform
  * adapter (the Playables SDK may be absent or fail to load).
  */
-import { createPlatform } from '@icarus/platform';
+import { createPlatform, installErrorHooks } from '@icarus/platform';
 import { Game } from './game';
 
 const platform = createPlatform('frenzy');
 
-window.addEventListener('error', (e) => {
-  platform.reportError('frenzy', e.error ?? e.message);
-});
-window.addEventListener('unhandledrejection', (e) => {
-  platform.reportError('frenzy', e.reason);
-});
+installErrorHooks(platform, 'frenzy');
 
 const game = new Game(platform);
 
 platform.bindLifecycle({
   pause: () => game.pause(),
   resume: () => game.resume(),
+  // A host/visibility resume must not dismiss a pause the user chose.
+  isManualPause: () => game.isManualPause,
 });
 
 game.init().catch((err) => platform.reportError('frenzy', err));

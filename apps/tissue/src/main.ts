@@ -5,7 +5,7 @@
  * medals, save shape, blitz scoring) live in ./core and are unit-tested
  * with vitest.
  */
-import { createPlatform } from '@icarus/platform';
+import { createPlatform, haptics, installErrorHooks } from '@icarus/platform';
 import type { RoundSize } from './core/constants';
 import { BLITZ_SIZE, blitzOver, blitzPointsFor, blitzTimeLeftMs } from './core/blitz';
 import { formatNextMedalMs, medalFor, nextMedalMs } from './core/medals';
@@ -47,6 +47,9 @@ type AppState = 'menu' | 'countdown' | 'playing' | 'results';
 type GameMode = 'time' | 'blitz';
 
 const platform = createPlatform('tissue');
+// Error hooks must precede any fallible construction (renderer below) so a
+// constructor throw is still reported to the host health channel.
+installErrorHooks(platform, 'tissue');
 const audio = new AudioSfx();
 const renderer = new Renderer(document.getElementById('stage') as HTMLElement);
 
@@ -59,6 +62,8 @@ renderer.setReducedMotion(reducedMotion);
 let save: SaveData = normalizeSave(undefined);
 let appState: AppState = 'menu';
 let paused = false;
+/** True when the user opened the pause overlay (vs. a host/visibility pause). */
+let manualPaused = false;
 let round: RoundState | null = null;
 let mode: GameMode = 'time';
 let blitzScore = 0;
@@ -79,15 +84,6 @@ let lastRustleDist = 0;
 let countdownT = 0;
 let countdownLabel = '';
 let lastRemaining = -1;
-
-/** Best-effort haptic tick; silently unsupported on iOS/desktop browsers. */
-function vibrate(pattern: number | number[]): void {
-  try {
-    navigator.vibrate?.(pattern);
-  } catch {
-    /* vibration unsupported */
-  }
-}
 
 /** Fever mode (streak >= 10): audio bed + box glow + sparkle trails. */
 function setFever(on: boolean): void {
@@ -276,9 +272,9 @@ bindPointer(renderer.domElement, {
         // Golden tissue: bonus arpeggio + gold burst + stronger haptic.
         audio.golden();
         renderer.goldBurst(x, y);
-        vibrate([12, 40, 12]);
+        haptics([12, 40, 12]);
       } else {
-        vibrate(res.tier === 'blazing' ? 15 : 12);
+        haptics(res.tier === 'blazing' ? 15 : 12);
       }
       if (mode === 'blitz') blitzScore += blitzPointsFor(res.streak);
       setFever(feverActive(res.streak));
@@ -425,6 +421,7 @@ const ui = new UI({
     audio.click();
     if (paused) {
       paused = false;
+      manualPaused = false;
       audio.setEnabled(platform.isAudioEnabled());
       ui.setPaused(false);
     }
@@ -432,9 +429,11 @@ const ui = new UI({
   },
   onResume() {
     audio.click();
+    manualPaused = false;
     resumeGame();
   },
   onPause() {
+    manualPaused = true;
     pauseGame();
   },
   onRestart() {
@@ -442,6 +441,7 @@ const ui = new UI({
     if (!round) return;
     if (paused) {
       paused = false;
+      manualPaused = false;
       audio.setEnabled(platform.isAudioEnabled());
       ui.setPaused(false);
       last = performance.now();
@@ -462,7 +462,12 @@ async function boot(): Promise<void> {
   save = normalizeSave(await platform.load(normalizeSave(undefined)));
   goToMenu();
   window.addEventListener('resize', () => renderer.resize());
-  platform.bindLifecycle({ pause: pauseGame, resume: resumeGame });
+  platform.bindLifecycle({
+    pause: pauseGame,
+    resume: resumeGame,
+    // A host/visibility resume must not dismiss a pause the user chose.
+    isManualPause: () => manualPaused,
+  });
   platform.onAudioEnabledChange((enabled) => {
     audio.setEnabled(enabled && !paused);
   });
@@ -470,12 +475,5 @@ async function boot(): Promise<void> {
   last = performance.now();
   rafId = requestAnimationFrame(loop);
 }
-
-window.addEventListener('error', (e) => {
-  platform.reportError('tissue', e.error ?? e.message);
-});
-window.addEventListener('unhandledrejection', (e) => {
-  platform.reportError('tissue', e.reason);
-});
 
 void boot();

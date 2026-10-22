@@ -5,7 +5,7 @@
  * (scoring, wobble, orders, save) live in ./core and are unit-tested.
  */
 import * as THREE from 'three';
-import { createPlatform } from '@icarus/platform';
+import { createPlatform, haptics, installErrorHooks } from '@icarus/platform';
 import {
   BETWEEN_ORDERS_HOLD,
   BETWEEN_ORDERS_MIN,
@@ -66,12 +66,7 @@ const platform = createPlatform('swirl');
 const audio = new AudioSfx();
 
 // Register error reporters before any fallible setup (renderer creation etc.).
-window.addEventListener('error', (e) => {
-  platform.reportError('swirl', e.error ?? e.message);
-});
-window.addEventListener('unhandledrejection', (e) => {
-  platform.reportError('swirl', e.reason);
-});
+installErrorHooks(platform, 'swirl');
 
 let save: SaveData = normalizeSave(undefined);
 let state: GameState = 'title';
@@ -144,15 +139,6 @@ const input: InputState = bindInput(
 );
 
 /* ------------------------------- helpers ------------------------------- */
-
-/** Guarded haptics — a no-op on iOS/desktop, free juice on Android. */
-function vibrate(pattern: number | number[]): void {
-  try {
-    navigator.vibrate?.(pattern);
-  } catch {
-    /* unsupported */
-  }
-}
 
 function currentLean(): number {
   return wobble * (wobbleRatio(wobble, height) / TOPPLE_WOBBLE_RATIO) * 0.9;
@@ -376,7 +362,7 @@ function startTopple(): void {
   audio.setTension(0);
   world.setShake(0);
   audio.topple();
-  vibrate([40, 40, 90]);
+  haptics([40, 40, 90]);
   world.updateStrand(false);
   const lean = currentLean();
   toppleDir = lean >= 0 ? -1 : 1;
@@ -458,7 +444,7 @@ function updatePlaying(dt: number): void {
       turboBeatFired = true;
       ui.toast('TURBO!');
       audio.starBlip(2);
-      vibrate(25);
+      haptics(25);
     }
   }
   wobble = updateWobble(wobble, offset, dt, dispensing, isTurbo ? turboGainScale(turbo) : 1);
@@ -493,7 +479,7 @@ function updatePlaying(dt: number): void {
       milestonesHit += 1;
       ui.toast(`${cm} cm!`);
       audio.starBlip(0);
-      vibrate(25);
+      haptics(25);
     }
   }
 
@@ -680,7 +666,7 @@ const ui = new UI({
   },
   onStarReveal(index) {
     audio.starBlip(index);
-    vibrate(15);
+    haptics(15);
   },
   onContinueRush() {
     audio.click();
@@ -694,10 +680,9 @@ async function boot(): Promise<void> {
   window.addEventListener('resize', () => world.resize());
   platform.bindLifecycle({
     pause: pauseGame,
-    resume: () => {
-      // A host/visibility resume must not dismiss a pause the user chose.
-      if (!manualPaused) resumeGame();
-    },
+    resume: resumeGame,
+    // A host/visibility resume must not dismiss a pause the user chose.
+    isManualPause: () => manualPaused,
   });
   platform.onAudioEnabledChange((enabled) => {
     audio.setEnabled(enabled && !paused);

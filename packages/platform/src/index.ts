@@ -39,6 +39,12 @@ export type PlatformKind = 'playables' | 'web';
 export interface LifecycleHandlers {
   pause: () => void;
   resume: () => void;
+  /**
+   * Return true while the current pause was initiated by the user (pause
+   * button / overlay) rather than the host. A host or visibility resume will
+   * never dismiss a user-chosen pause — the game resumes only via its own UI.
+   */
+  isManualPause?: () => boolean;
 }
 
 export class Platform {
@@ -125,7 +131,7 @@ export class Platform {
    * on the open web it maps to document visibility. Games must mute audio and
    * halt simulation on pause.
    */
-  bindLifecycle({ pause, resume }: LifecycleHandlers): void {
+  bindLifecycle({ pause, resume, isManualPause }: LifecycleHandlers): void {
     let paused = false;
     const safePause = () => {
       if (paused) return;
@@ -135,6 +141,7 @@ export class Platform {
     const safeResume = () => {
       if (!paused) return;
       paused = false;
+      if (isManualPause?.()) return;
       resume();
     };
     const yt = typeof window !== 'undefined' ? window.ytgame : undefined;
@@ -178,10 +185,89 @@ export class Platform {
     } catch {
       /* unsupported host */
     }
-    console.error(`[platform] ${errorType}:`, error);
+    // Production builds must stay console-clean for the cert bar; the host
+    // health channel above is the reporting path. Log only in dev.
+    if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+      console.error(`[platform] ${errorType}:`, error);
+    }
   }
 }
 
 export function createPlatform(gameId: string): Platform {
   return new Platform(gameId);
+}
+
+/* --------------------------------------------------------------------------
+ * Shared helpers — one implementation for all four games.
+ * ------------------------------------------------------------------------ */
+
+let hapticsEnabled = true;
+
+/** Global haptics on/off (wired to the game's settings toggle). */
+export function setHapticsEnabled(enabled: boolean): void {
+  hapticsEnabled = enabled;
+}
+
+/**
+ * Guarded vibration: a no-op on iOS/desktop, free juice on Android.
+ * Best-effort only — some webviews throw, and that's fine.
+ */
+export function haptics(pattern: number | number[]): void {
+  if (!hapticsEnabled) return;
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* unsupported webview */
+  }
+}
+
+/** True when the OS asks for reduced motion (safe default: false). */
+export function osPrefersReducedMotion(): boolean {
+  try {
+    return (
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+  } catch {
+    return false;
+  }
+}
+
+const hookedGameIds = new Set<string>();
+
+/**
+ * Route uncaught errors and unhandled rejections to the host health channel.
+ * Call once, as early as possible in main.ts (before constructing anything
+ * that could throw) so constructor failures are reported too. Idempotent.
+ */
+export function installErrorHooks(platform: Platform, gameId: string): void {
+  if (typeof window === 'undefined' || hookedGameIds.has(gameId)) return;
+  hookedGameIds.add(gameId);
+  window.addEventListener('error', (e) => {
+    platform.reportError(gameId, e.error ?? e.message);
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    platform.reportError(gameId, e.reason ?? 'unhandled rejection');
+  });
+}
+
+/** mulberry32 — tiny deterministic PRNG shared by dailies and sims. */
+export function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Deterministic uint32 seed from a UTC calendar date (for Icarus Daily). */
+export function dateSeedUTC(date: Date = new Date()): number {
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth() + 1;
+  const d = date.getUTCDate();
+  return ((y * 10000 + m * 100 + d) * 2654435761) >>> 0;
 }
