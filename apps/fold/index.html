@@ -111,13 +111,18 @@
         left: 0;
         right: 0;
         display: flex;
-        align-items: center;
-        gap: 8px;
+        flex-direction: column;
+        gap: 3px;
         padding: calc(8px + var(--sat)) calc(10px + var(--sar)) 8px calc(10px + var(--sal));
         pointer-events: none;
       }
       #hud .btn {
         pointer-events: auto;
+      }
+      #hud .hud-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
       #hud-title {
         flex: 1;
@@ -137,6 +142,28 @@
         padding: 10px 12px;
         font-size: 14px;
       }
+      /* Live fold/par counter + current star-tier preview. */
+      #hud-sub {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--muted);
+        line-height: 1.2;
+        min-height: 16px;
+      }
+      #hud-stars {
+        letter-spacing: 2px;
+        font-size: 14px;
+      }
+      #hud-stars .star-on {
+        color: var(--terra);
+      }
+      #hud-stars .star-off {
+        color: rgba(160, 130, 95, 0.35);
+      }
 
       /* ---------- screens ---------- */
       .screen {
@@ -147,6 +174,16 @@
         justify-content: center;
         padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab))
           calc(16px + var(--sal));
+        /* Soft fade on every screen swap (restarts when [hidden] toggles). */
+        animation: screen-fade 0.3s ease;
+      }
+      @keyframes screen-fade {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
       }
       .screen.overlay {
         background: rgba(74, 63, 48, 0.28);
@@ -214,6 +251,12 @@
         text-align: center;
         margin-right: 60px;
       }
+      #levels-progress {
+        margin-top: -8px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
+      }
       #level-grid {
         display: grid;
         grid-template-columns: repeat(5, 1fr);
@@ -258,6 +301,76 @@
         color: var(--muted);
         display: flex;
       }
+      /* Perfect-run (3★) marker: a calm gold border. */
+      .level-cell.perfect {
+        border-color: #c9a227;
+        box-shadow:
+          0 0 0 1px rgba(201, 162, 39, 0.35),
+          0 2px 0 rgba(120, 90, 50, 0.12);
+      }
+
+      /* ---------- gallery ---------- */
+      .gallery-panel {
+        width: min(560px, 100%);
+      }
+      #gallery-progress {
+        margin-top: -8px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 600;
+      }
+      #gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        width: 100%;
+        overflow-y: auto;
+        padding: 2px;
+      }
+      .gallery-card {
+        background: var(--paper);
+        border: 1.5px solid var(--line);
+        border-radius: 14px;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        /* Soft shadow + lit top rim, matching the canvas key light. */
+        box-shadow:
+          0 3px 10px rgba(96, 68, 36, 0.12),
+          inset 0 1px 0 rgba(255, 253, 246, 0.7);
+      }
+      .gallery-card canvas {
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        display: block;
+      }
+      .gallery-card .card-name {
+        font-size: 13px;
+        font-weight: 700;
+        text-align: center;
+      }
+      .gallery-card .card-stars {
+        font-size: 11px;
+        color: var(--terra);
+        letter-spacing: 1px;
+        min-height: 13px;
+      }
+      .gallery-card.locked {
+        opacity: 0.6;
+      }
+      .gallery-card.locked .card-name {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .gallery-card.perfect {
+        border-color: #c9a227;
+        box-shadow:
+          0 0 0 1px rgba(201, 162, 39, 0.35),
+          0 3px 10px rgba(96, 68, 36, 0.12),
+          inset 0 1px 0 rgba(255, 253, 246, 0.7);
+      }
 
       /* ---------- results ---------- */
       #results-stars {
@@ -265,10 +378,69 @@
         color: var(--terra);
         letter-spacing: 6px;
         line-height: 1;
+        min-height: 46px;
+      }
+      /* Staggered pop-in; delays are set per-star from ui.ts. */
+      #results-stars .star {
+        display: inline-block;
+        opacity: 0;
+        transform: scale(0.3);
+      }
+      #results-stars .star.earned {
+        color: var(--terra);
+        animation: star-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      }
+      #results-stars .star.empty {
+        color: rgba(160, 130, 95, 0.3);
+        animation: star-fade 0.3s ease forwards;
+      }
+      @keyframes star-pop {
+        0% {
+          opacity: 0;
+          transform: scale(0.2) rotate(-16deg);
+        }
+        60% {
+          opacity: 1;
+          transform: scale(1.3) rotate(4deg);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1) rotate(0deg);
+        }
+      }
+      @keyframes star-fade {
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      #results-best {
+        margin-top: -8px;
+        color: var(--terra);
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+      #results-streak {
+        margin-top: -6px;
+        color: #b08d2e;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
       }
       #results-stats {
         color: var(--muted);
         font-size: 15px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #results-stars .star {
+          animation: none;
+          opacity: 1;
+          transform: none;
+        }
+        .screen {
+          animation: none;
+        }
       }
 
       /* ---------- toast ---------- */
@@ -285,6 +457,29 @@
         max-width: min(90%, 420px);
         text-align: center;
         pointer-events: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      /* Toasts with an action button must be tappable. */
+      #toast.has-action {
+        pointer-events: auto;
+      }
+      .toast-action {
+        flex: none;
+        min-height: 44px;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 999px;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .toast-action:active {
+        transform: scale(0.95);
       }
 
       @media (max-width: 420px) {
@@ -310,12 +505,18 @@
       <canvas id="scene"></canvas>
 
       <div id="hud" hidden>
-        <button class="btn icon" id="btn-menu" aria-label="Menu">‹</button>
-        <div id="hud-title">Fold</div>
-        <div class="hud-actions">
-          <button class="btn" id="btn-undo">Undo</button>
-          <button class="btn" id="btn-hint">Hint 3</button>
-          <button class="btn" id="btn-reset">Reset</button>
+        <div class="hud-row">
+          <button class="btn icon" id="btn-menu" aria-label="Menu">‹</button>
+          <div id="hud-title">Fold</div>
+          <div class="hud-actions">
+            <button class="btn" id="btn-undo">Undo</button>
+            <button class="btn" id="btn-hint">Hint 3</button>
+            <button class="btn" id="btn-reset">Reset</button>
+          </div>
+        </div>
+        <div id="hud-sub">
+          <span id="hud-folds"></span>
+          <span id="hud-stars" aria-label="current star tier"></span>
         </div>
       </div>
 
@@ -323,7 +524,9 @@
         <div class="panel title-panel">
           <div class="logo">Fold</div>
           <div class="tagline">a calm origami puzzle</div>
+          <button class="btn primary big" id="btn-continue" hidden>Continue</button>
           <button class="btn primary big" id="btn-play">Play</button>
+          <button class="btn big" id="btn-gallery">Gallery</button>
           <div id="total-stars"></div>
         </div>
       </div>
@@ -334,7 +537,19 @@
             <button class="btn icon" id="btn-levels-back" aria-label="Back">‹</button>
             <h2>Levels</h2>
           </div>
+          <div id="levels-progress"></div>
           <div id="level-grid"></div>
+        </div>
+      </div>
+
+      <div class="screen" id="screen-gallery" hidden>
+        <div class="panel gallery-panel">
+          <div class="levels-head">
+            <button class="btn icon" id="btn-gallery-back" aria-label="Back">‹</button>
+            <h2>Gallery</h2>
+          </div>
+          <div id="gallery-progress"></div>
+          <div id="gallery-grid"></div>
         </div>
       </div>
 
@@ -342,6 +557,8 @@
         <div class="panel results-panel">
           <h2 id="results-title">Level complete</h2>
           <div id="results-stars"></div>
+          <div id="results-best" hidden>New best!</div>
+          <div id="results-streak" hidden></div>
           <div id="results-stats"></div>
           <div class="row">
             <button class="btn" id="btn-retry">Retry</button>

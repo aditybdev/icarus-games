@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.9">
+      <stop offset="0" stop-color="#F6FAFF"/>
+      <stop offset="1" stop-color="#CFE2F8"/>
+    </radialGradient>
+    <linearGradient id="boxTop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7FB3E8"/>
+      <stop offset="1" stop-color="#5B93D6"/>
+    </linearGradient>
+    <linearGradient id="boxFront" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6FA3DE"/>
+      <stop offset="1" stop-color="#4878B8"/>
+    </linearGradient>
+    <linearGradient id="boxSide" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5B93D6"/>
+      <stop offset="1" stop-color="#3C68A6"/>
+    </linearGradient>
+    <linearGradient id="sheet" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EAF1FA"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="2732" height="2732" fill="url(#bg)"/>
+
+  <g transform="translate(1366 1030) scale(1.45)">
+    <path d="M-150 20 Q-190 -140 -110 -210 Q-60 -256 0 -232 Q40 -300 120 -270 Q200 -240 168 -150 Q150 -96 120 -60 Q150 10 96 26 Q40 40 0 20 Q-60 44 -110 34 Q-140 30 -150 20 Z" fill="url(#sheet)"/>
+    <path d="M-60 -40 Q-30 -120 30 -150" fill="none" stroke="#D7E2F2" stroke-width="12" stroke-linecap="round"/>
+    <ellipse cx="-52" cy="-150" rx="40" ry="18" fill="#FFF" opacity="0.8" transform="rotate(-24 -52 -150)"/>
+  </g>
+
+  <g transform="translate(1366 1430) scale(1.45)">
+    <path d="M-250 -40 L-150 -110 L250 -110 L150 -40 Z" fill="url(#boxTop)"/>
+    <path d="M-110 -78 L110 -78 L84 -56 L-84 -56 Z" fill="#2F5484"/>
+    <path d="M-250 -40 L150 -40 L150 190 L-250 190 Z" fill="url(#boxFront)"/>
+    <path d="M150 -40 L250 -110 L250 120 L150 190 Z" fill="url(#boxSide)"/>
+    <path d="M-250 60 Q-175 20 -100 60 Q-25 100 50 60 Q112 28 150 54 L150 190 L-250 190 Z" fill="#FFFFFF" opacity="0.18"/>
+    <path d="M-250 -40 L-150 -110 L250 -110 L250 120 L150 190 L-250 190 Z M150 -40 L250 -110 M150 -40 L-250 -40 M150 -40 L150 190" fill="none" stroke="#2F5484" stroke-width="10" stroke-linejoin="round" opacity="0.5"/>
+    <path d="M-118 -80 L118 -80 L90 -54 L-90 -54 Z" fill="none" stroke="#DCE8F8" stroke-width="8" opacity="0.85"/>
+  </g>
+
+  <text x="1366" y="2110" text-anchor="middle" font-family="Avenir Next, Trebuchet MS, sans-serif" font-size="160" font-weight="700" fill="#3C68A6">Tissue Rush</text>
+  <text x="1366" y="2240" text-anchor="middle" font-family="Avenir Next, Trebuchet MS, sans-serif" font-size="64" font-weight="500" fill="#7E9CC4">ICARUS GAMES</text>
+</svg>

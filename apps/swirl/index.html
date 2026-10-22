@@ -275,6 +275,31 @@
         transition: height 0.08s linear;
       }
 
+      #meter-fill.turbo {
+        background: linear-gradient(180deg, #ffb630 0%, var(--pink) 55%, var(--pink-deep) 100%);
+        animation: turbo-shine 0.8s linear infinite;
+      }
+
+      @keyframes turbo-shine {
+        0%, 100% { filter: brightness(1); }
+        50% { filter: brightness(1.28); }
+      }
+
+      #combo-chip {
+        color: var(--pink-deep);
+        border: 2px solid var(--pink-soft);
+      }
+
+      #combo-chip.hot {
+        animation: combo-pop 0.3s ease-out;
+      }
+
+      @keyframes combo-pop {
+        0% { transform: scale(0.6); }
+        60% { transform: scale(1.15); }
+        100% { transform: scale(1); }
+      }
+
       #meter-band {
         position: absolute;
         left: 0;
@@ -330,6 +355,33 @@
       #wobble.danger #wobble-dot {
         border-color: #e23c3c;
         animation: wobble-pulse 0.35s infinite alternate;
+      }
+
+      #wobble.danger #wobble-track {
+        animation: wobble-edge 0.35s infinite alternate;
+      }
+
+      @keyframes wobble-edge {
+        from { box-shadow: var(--shadow), inset 0 0 0 2px rgba(226, 60, 60, 0.25); }
+        to { box-shadow: var(--shadow), 0 0 14px rgba(226, 60, 60, 0.55), inset 0 0 0 2px rgba(226, 60, 60, 0.7); }
+      }
+
+      /* saved-best marker on the height meter */
+      #meter-best {
+        position: absolute;
+        left: -2px;
+        right: -2px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--choc);
+        opacity: 0.55;
+      }
+
+      .tap-hint {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: #b08a72;
       }
 
       @keyframes wobble-pulse {
@@ -441,11 +493,59 @@
 
       .star {
         color: #e8d9c8;
+        display: inline-block;
       }
 
       .star.earned {
         color: #ffb630;
         text-shadow: 0 2px 6px rgba(255, 182, 48, 0.5);
+      }
+
+      .star.pending {
+        visibility: hidden;
+      }
+
+      .star.pop {
+        animation: star-pop 0.28s ease-out;
+      }
+
+      @keyframes star-pop {
+        0% { transform: scale(0.3); }
+        60% { transform: scale(1.3); }
+        100% { transform: scale(1); }
+      }
+
+      #meter-band.flash {
+        animation: band-flash 0.6s ease-out;
+      }
+
+      @keyframes band-flash {
+        0% { background: rgba(84, 196, 149, 0.95); box-shadow: 0 0 18px rgba(84, 196, 149, 0.9); }
+        100% { background: rgba(84, 196, 149, 0.45); box-shadow: none; }
+      }
+
+      #flavor-chip.mismatch {
+        outline: 2px solid #e23c3c;
+        color: #e23c3c;
+      }
+
+      .flavor-btn.hint-pulse {
+        animation: hint-pulse 0.9s ease-in-out infinite;
+      }
+
+      @keyframes hint-pulse {
+        0%, 100% { transform: scale(1); box-shadow: var(--shadow), 0 0 0 0 rgba(226, 60, 60, 0.55); }
+        50% { transform: scale(1.12); box-shadow: var(--shadow), 0 0 0 10px rgba(226, 60, 60, 0); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .star.pop,
+        #meter-band.flash,
+        #meter-fill.turbo,
+        #combo-chip.hot,
+        .flavor-btn.hint-pulse {
+          animation: none;
+        }
       }
 
       #results-score {
@@ -494,6 +594,8 @@
           <span id="flavor-name">Vanilla</span>
         </div>
         <div id="order-label" class="chip" hidden></div>
+        <div id="score-chip" class="chip" hidden>0 pts</div>
+        <div id="combo-chip" class="chip" hidden>×2!</div>
         <button id="pause-btn" class="icon-btn" type="button" aria-label="Pause">
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
             <rect x="2" y="1" width="5" height="16" rx="2" fill="currentColor" />
@@ -505,6 +607,7 @@
       <div id="meter">
         <div id="meter-track">
           <div id="meter-band" hidden></div>
+          <div id="meter-best" hidden></div>
           <div id="meter-fill"></div>
         </div>
         <div id="meter-label">0 cm</div>
@@ -546,8 +649,12 @@
         <div id="results-stars"></div>
         <div id="results-score"></div>
         <div id="results-best"></div>
+        <button id="btn-continue-rush" class="btn btn-secondary btn-big" type="button" hidden>
+          Keep rushing →
+        </button>
         <button id="btn-replay" class="btn btn-big" type="button">Replay</button>
         <button id="btn-results-menu" class="btn btn-secondary btn-big" type="button">Menu</button>
+        <p class="tap-hint">Tap anywhere to replay</p>
       </div>
     </div>
 
@@ -556,6 +663,7 @@
         <p id="order-card-title"></p>
         <h2 id="order-card-flavor"></h2>
         <p id="order-card-target"></p>
+        <p class="tap-hint">Tap to start</p>
       </div>
     </div>
 

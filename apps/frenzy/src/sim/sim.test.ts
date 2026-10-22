@@ -6,7 +6,16 @@
 
 import { describe, expect, it } from 'vitest';
 import { nextRandom } from './prng';
-import { effectiveTimeMs, rankFor, scoreFor } from './rules';
+import {
+  RANK_THRESHOLDS_MS,
+  effectiveTimeMs,
+  paceBarPct,
+  pbPaceX,
+  projectedRank,
+  rankBeats,
+  rankFor,
+  scoreFor,
+} from './rules';
 import { stepSim } from './sim';
 import {
   DT,
@@ -54,7 +63,8 @@ function assertFiniteState(s: SimState): void {
     s.timeMs,
     s.penaltyMs,
     s.distance,
-    s.falls,
+    s.stumbles,
+    s.wipeouts,
     s.stumbleT,
   ];
   for (const leg of s.legs) {
@@ -146,7 +156,8 @@ describe('impulse and counter-torque', () => {
     expect(s.body.v).toBeGreaterThan(1.5);
     expect(s.distance).toBeGreaterThan(12);
     expect(Math.abs(s.body.pitch)).toBeLessThan(STUMBLE_RAD);
-    expect(s.falls).toBe(0);
+    expect(s.stumbles).toBe(0);
+    expect(s.wipeouts).toBe(0);
   });
 });
 
@@ -155,25 +166,41 @@ describe('stumble, fall and recovery', () => {
     const s = createSim('race', 3);
     s.body.pitch = STUMBLE_RAD + 0.09;
     stepSim(s, NO_INPUT);
-    expect(s.falls).toBe(1);
+    expect(s.stumbles).toBe(1);
+    expect(s.wipeouts).toBe(0);
     expect(s.stumbleT).toBeGreaterThan(0);
     expect(s.events.some((e) => e.type === 'stumble')).toBe(true);
     expect(s.body.v).toBeLessThanOrEqual(0.0001);
   });
 
-  it('full flip past ~80° counts a fall, resets to track with a time penalty', () => {
+  it('full flip past ~80° counts a wipeout, resets to track with a time penalty', () => {
     const s = createSim('race', 3);
     s.body.x = 20;
     s.body.v = 3;
     s.body.pitch = 1.5;
     stepSim(s, NO_INPUT);
-    expect(s.falls).toBe(1);
+    expect(s.stumbles).toBe(0);
+    expect(s.wipeouts).toBe(1);
     expect(s.penaltyMs).toBe(3000);
     expect(s.body.x).toBeLessThanOrEqual(18.5);
     expect(s.body.pitch).toBe(0);
     expect(s.body.v).toBe(0);
     expect(s.legs.every((l) => l.phase === 'planted')).toBe(true);
     expect(s.events.some((e) => e.type === 'fall')).toBe(true);
+  });
+
+  it('stumbles and wipeouts are counted independently', () => {
+    const s = createSim('race', 3);
+    s.body.pitch = STUMBLE_RAD + 0.09;
+    stepSim(s, NO_INPUT);
+    expect(s.stumbles).toBe(1);
+    expect(s.wipeouts).toBe(0);
+    // Recover, then flip: each counter moves exactly once.
+    s.stumbleT = 0;
+    s.body.pitch = 1.5;
+    stepSim(s, NO_INPUT);
+    expect(s.stumbles).toBe(1);
+    expect(s.wipeouts).toBe(1);
   });
 
   it('recovery never NaNs over 10k steps of random seeded inputs', () => {
@@ -312,5 +339,51 @@ describe('rules', () => {
     expect(scoreFor(false, RACE_LIMIT_MS, 25)).toBe(500);
     expect(scoreFor(false, RACE_LIMIT_MS, 0)).toBe(0);
     expect(scoreFor(true, 0, TRACK_LENGTH)).toBeGreaterThan(0); // degenerate clock guard
+  });
+});
+
+describe('pace rules', () => {
+  it('exported thresholds agree with rankFor at every boundary', () => {
+    expect(RANK_THRESHOLDS_MS.map((t) => [t.rank, t.maxMs])).toEqual([
+      ['S', 30_000],
+      ['A', 45_000],
+      ['B', 65_000],
+    ]);
+    for (const t of RANK_THRESHOLDS_MS) {
+      expect(rankFor(t.maxMs)).toBe(t.rank);
+    }
+  });
+
+  it('rankBeats orders S > A > B > C strictly', () => {
+    expect(rankBeats('S', 'A')).toBe(true);
+    expect(rankBeats('A', 'C')).toBe(true);
+    expect(rankBeats('B', 'C')).toBe(true);
+    expect(rankBeats('C', 'B')).toBe(false);
+    expect(rankBeats('A', 'A')).toBe(false);
+  });
+
+  it('pbPaceX slides the flag at the PB average pace and clamps to the course', () => {
+    expect(pbPaceX(20_000, 40_000)).toBe(25); // halfway through the PB → halfway down the track
+    expect(pbPaceX(40_000, 40_000)).toBe(TRACK_LENGTH);
+    expect(pbPaceX(60_000, 40_000)).toBe(TRACK_LENGTH); // past the line: stay at the finish
+    expect(pbPaceX(0, 40_000)).toBe(0);
+    expect(pbPaceX(10_000, 0)).toBe(0); // no PB recorded
+  });
+
+  it('paceBarPct marks where each rank requires you to be right now', () => {
+    expect(paceBarPct(15_000, 30_000)).toBe(50); // half of the S budget → must be halfway
+    expect(paceBarPct(30_000, 30_000)).toBe(100);
+    expect(paceBarPct(45_000, 30_000)).toBe(100); // rank already out of reach: pin at the end
+    expect(paceBarPct(0, 30_000)).toBe(0);
+    expect(paceBarPct(10_000, 0)).toBe(0); // degenerate threshold guard
+  });
+
+  it('projectedRank extrapolates current pace over the full course', () => {
+    expect(projectedRank(15_000, 25)).toBe('S'); // 25 m in 15 s → 30 s pace
+    expect(projectedRank(20_000, 25)).toBe('A'); // 40 s pace
+    expect(projectedRank(30_000, 25)).toBe('B'); // 60 s pace
+    expect(projectedRank(50_000, 25)).toBe('C');
+    expect(projectedRank(0, 0)).toBeNull(); // no distance yet — nothing to project
+    expect(projectedRank(5_000, -1)).toBeNull(); // degenerate distance guard
   });
 });

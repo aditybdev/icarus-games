@@ -120,23 +120,30 @@ export class AudioFx {
     src.stop(t + 0.34);
   }
 
-  /** Gentle three-note chime on level complete. */
-  chime(): void {
+  /**
+   * Tiered completion chime: an ascending arpeggio with one note per earned
+   * star (1/2/3). A perfect 3-star run adds a soft octave shimmer on top.
+   */
+  chime(stars: 1 | 2 | 3 = 3): void {
     if (!this.ready || !this.ctx || !this.master) return;
-    const notes = [523.25, 659.25, 783.99];
+    const notes = [523.25, 659.25, 783.99].slice(0, stars);
+    if (stars === 3) notes.push(1046.5); // gentle C6 sparkle for a perfect run
     notes.forEach((freq, i) => {
       if (!this.ctx || !this.master) return;
+      const isShimmer = stars === 3 && i === notes.length - 1;
       const t = this.ctx.currentTime + i * 0.09;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sine';
       osc.frequency.value = freq;
+      const peak = isShimmer ? 0.1 : 0.2;
+      const decay = isShimmer ? 0.7 : 0.5;
       gain.gain.setValueAtTime(0.001, t);
-      gain.gain.exponentialRampToValueAtTime(0.2, t + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
       osc.connect(gain).connect(this.master);
       osc.start(t);
-      osc.stop(t + 0.55);
+      osc.stop(t + decay + 0.05);
     });
   }
 }

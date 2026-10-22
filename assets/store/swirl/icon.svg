@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFF6EC"/>
+      <stop offset="1" stop-color="#FFE3D1"/>
+    </linearGradient>
+    <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0B26B"/>
+      <stop offset="1" stop-color="#D98F43"/>
+    </linearGradient>
+    <linearGradient id="cream" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFE0EC"/>
+    </linearGradient>
+    <linearGradient id="pink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC4DA"/>
+      <stop offset="1" stop-color="#FF9EC4"/>
+    </linearGradient>
+    <pattern id="waffle" width="56" height="56" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="56" height="56" fill="none"/>
+      <path d="M0 0H56M0 28H56M0 56H56" stroke="#B96F2E" stroke-width="10" opacity="0.55"/>
+    </pattern>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- cone -->
+  <g transform="translate(512 560)">
+    <path d="M-190 -20 L0 400 L190 -20 Z" fill="url(#cone)"/>
+    <path d="M-190 -20 L0 400 L190 -20 Z" fill="url(#waffle)" opacity="0.8"/>
+    <path d="M-190 -20 L0 400 L190 -20 Z" fill="none" stroke="#B96F2E" stroke-width="14" stroke-linejoin="round" opacity="0.35"/>
+    <path d="M-190 -20 L0 400 L190 -20 Z" fill="#000" opacity="0">
+    </path>
+    <ellipse cx="0" cy="-20" rx="190" ry="42" fill="#E3A15A"/>
+  </g>
+
+  <!-- soft serve: stacked ellipses shrinking upward with a curl tip -->
+  <g transform="translate(512 520)">
+    <ellipse cx="0" cy="-40" rx="215" ry="88" fill="url(#pink)"/>
+    <ellipse cx="0" cy="-120" rx="185" ry="82" fill="url(#cream)"/>
+    <ellipse cx="0" cy="-195" rx="152" ry="72" fill="url(#pink)"/>
+    <ellipse cx="0" cy="-262" rx="118" ry="60" fill="url(#cream)"/>
+    <ellipse cx="0" cy="-320" rx="84" ry="48" fill="url(#pink)"/>
+    <path d="M-84 -338 Q-92 -420 18 -432 Q96 -440 88 -380 Q84 -344 40 -332 Z" fill="url(#cream)"/>
+    <!-- highlights -->
+    <ellipse cx="-60" cy="-150" rx="70" ry="26" fill="#FFF" opacity="0.55"/>
+    <ellipse cx="-38" cy="-285" rx="42" ry="16" fill="#FFF" opacity="0.5"/>
+    <ellipse cx="30" cy="-412" rx="22" ry="10" fill="#FFF" opacity="0.6"/>
+  </g>
+</svg>

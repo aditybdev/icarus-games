@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.9">
+      <stop offset="0" stop-color="#FFFBF4"/>
+      <stop offset="1" stop-color="#FFE0CC"/>
+    </radialGradient>
+    <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0B26B"/>
+      <stop offset="1" stop-color="#D98F43"/>
+    </linearGradient>
+    <linearGradient id="cream" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFE0EC"/>
+    </linearGradient>
+    <linearGradient id="pink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC4DA"/>
+      <stop offset="1" stop-color="#FF9EC4"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="2732" height="2732" fill="url(#bg)"/>
+
+  <g transform="translate(1366 1290) scale(1.35)">
+    <path d="M-190 -20 L0 400 L190 -20 Z" fill="url(#cone)"/>
+    <ellipse cx="0" cy="-20" rx="190" ry="42" fill="#E3A15A"/>
+    <g transform="translate(0 -40)">
+      <ellipse cx="0" cy="-40" rx="215" ry="88" fill="url(#pink)"/>
+      <ellipse cx="0" cy="-120" rx="185" ry="82" fill="url(#cream)"/>
+      <ellipse cx="0" cy="-195" rx="152" ry="72" fill="url(#pink)"/>
+      <ellipse cx="0" cy="-262" rx="118" ry="60" fill="url(#cream)"/>
+      <ellipse cx="0" cy="-320" rx="84" ry="48" fill="url(#pink)"/>
+      <path d="M-84 -338 Q-92 -420 18 -432 Q96 -440 88 -380 Q84 -344 40 -332 Z" fill="url(#cream)"/>
+      <ellipse cx="-60" cy="-150" rx="70" ry="26" fill="#FFF" opacity="0.55"/>
+      <ellipse cx="30" cy="-412" rx="22" ry="10" fill="#FFF" opacity="0.6"/>
+    </g>
+  </g>
+
+  <text x="1366" y="2080" text-anchor="middle" font-family="Avenir Next, Trebuchet MS, sans-serif" font-size="170" font-weight="700" fill="#B96F2E">Swirl!</text>
+  <text x="1366" y="2210" text-anchor="middle" font-family="Avenir Next, Trebuchet MS, sans-serif" font-size="64" font-weight="500" fill="#D89A6A">ICARUS GAMES</text>
+</svg>

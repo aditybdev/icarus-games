@@ -229,6 +229,81 @@
         color: var(--mint-deep);
       }
 
+      /* Medal dot earned on this size (best-time medal). */
+      .medal-dot {
+        width: 13px;
+        height: 13px;
+        margin-top: 2px;
+        border-radius: 50%;
+        background: transparent;
+        box-shadow: inset 0 0 0 2px #d5e7f2;
+      }
+
+      .medal-dot.bronze {
+        background: radial-gradient(circle at 35% 30%, #e8b285, #b0703a);
+        box-shadow: 0 1px 3px rgba(120, 70, 20, 0.4);
+      }
+
+      .medal-dot.silver {
+        background: radial-gradient(circle at 35% 30%, #eef4fa, #9fb2c4);
+        box-shadow: 0 1px 3px rgba(90, 110, 130, 0.4);
+      }
+
+      .medal-dot.gold {
+        background: radial-gradient(circle at 35% 30%, #ffe9a8, #e3a62c);
+        box-shadow: 0 1px 4px rgba(200, 140, 20, 0.5);
+      }
+
+      /* Box-skin picker dots. */
+      #skin-row {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        align-items: center;
+        min-height: 32px;
+      }
+
+      .skin-dot {
+        /* 30px visual dot inside a 44px touch target (transparent border). */
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 7px solid transparent;
+        border-radius: 50%;
+        background-clip: padding-box;
+        cursor: pointer;
+        box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.12);
+      }
+
+      .skin-dot.selected {
+        outline: 3px solid var(--sky-deep);
+        outline-offset: 2px;
+      }
+
+      .skin-dot.locked {
+        opacity: 0.3;
+        filter: grayscale(0.9);
+        cursor: default;
+        box-shadow: none;
+      }
+
+      #menu-stats {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 800;
+        color: var(--ink-soft);
+      }
+
+      .btn-blitz {
+        background: #ffd166;
+        box-shadow: 0 6px 0 #dfa63a, var(--shadow);
+        color: #6e4a00;
+      }
+
+      .btn-blitz:active {
+        box-shadow: 0 2px 0 #dfa63a, var(--shadow);
+      }
+
       .howto {
         margin: 2px 0 0;
         font-size: 14px;
@@ -316,6 +391,72 @@
         color: var(--ink);
       }
 
+      /* Mini HUD chips under the timer: live streak count + pace delta. */
+      #hud > .hud-chip {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        min-height: 36px;
+        padding: 6px 14px;
+        font-size: 16px;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+
+      #streak-chip {
+        top: calc(env(safe-area-inset-top, 0px) + 68px);
+        color: #ef8b1f;
+      }
+
+      #streak-chip.hot {
+        color: #ff5e7a;
+      }
+
+      #streak-chip.bump {
+        animation: streak-bump 0.25s ease-out;
+      }
+
+      /* Mercy spent / chain broken: flash the chip so the cost is legible. */
+      #streak-chip.flash {
+        animation: streak-flash 0.45s ease-out;
+      }
+
+      @keyframes streak-flash {
+        0%,
+        100% {
+          background: var(--card);
+        }
+        35%,
+        70% {
+          background: #ffd9e0;
+          color: #ff5e7a;
+          transform: translateX(-50%) scale(1.12);
+        }
+      }
+
+      @keyframes streak-bump {
+        0% {
+          transform: translateX(-50%) scale(0.7);
+        }
+        60% {
+          transform: translateX(-50%) scale(1.18);
+        }
+        100% {
+          transform: translateX(-50%) scale(1);
+        }
+      }
+
+      #pace-chip {
+        top: calc(env(safe-area-inset-top, 0px) + 114px);
+        font-size: 15px;
+        color: var(--mint-deep);
+      }
+
+      #pace-chip.behind {
+        color: #ff5e7a;
+      }
+
       #streak-pop {
         position: fixed;
         left: 50%;
@@ -389,6 +530,19 @@
         color: #8fb3c7;
       }
 
+      #results-delta {
+        font-size: 16px;
+        font-weight: 800;
+      }
+
+      #results-delta.ahead {
+        color: var(--mint-deep);
+      }
+
+      #results-delta.behind {
+        color: #ff5e7a;
+      }
+
       #results-best {
         min-height: 22px;
         font-size: 15px;
@@ -398,6 +552,44 @@
 
       #results-best.new-best {
         color: #ff5e7a;
+      }
+
+      #results-medal {
+        font-size: 22px;
+        font-weight: 900;
+      }
+
+      #results-medal.show {
+        animation: medal-pop 0.6s cubic-bezier(0.2, 1.6, 0.4, 1);
+      }
+
+      @keyframes medal-pop {
+        0% {
+          opacity: 0;
+          transform: scale(0.4) rotate(-8deg);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1) rotate(0deg);
+        }
+      }
+
+      #results-medal.bronze {
+        color: #b0703a;
+      }
+
+      #results-medal.silver {
+        color: #8b9fb3;
+      }
+
+      #results-medal.gold {
+        color: #d99a1f;
+      }
+
+      #results-next-medal {
+        font-size: 15px;
+        font-weight: 800;
+        color: var(--sky-deep);
       }
 
       .pause-title {
@@ -424,6 +616,8 @@
           </svg>
         </button>
       </div>
+      <div id="streak-chip" class="chip hud-chip" hidden>×2</div>
+      <div id="pace-chip" class="chip hud-chip" hidden>+0.0 s</div>
     </div>
 
     <div id="streak-pop" hidden></div>
@@ -437,21 +631,29 @@
             <span class="size-num">25</span>
             <span class="size-label">tissues</span>
             <span class="size-best" id="best-25"></span>
+            <span class="medal-dot" id="medal-25"></span>
           </button>
           <button class="size-btn" data-size="50" type="button">
             <span class="size-num">50</span>
             <span class="size-label">tissues</span>
             <span class="size-best" id="best-50"></span>
+            <span class="medal-dot" id="medal-50"></span>
           </button>
           <button class="size-btn" data-size="100" type="button">
             <span class="size-num">100</span>
             <span class="size-label">tissues</span>
             <span class="size-best" id="best-100"></span>
+            <span class="medal-dot" id="medal-100"></span>
           </button>
         </div>
+        <button id="btn-blitz" class="btn btn-blitz btn-big" type="button">
+          Blitz — 30 s score attack
+        </button>
+        <div id="skin-row" aria-label="Box skins"></div>
+        <p id="menu-stats" hidden></p>
         <p class="howto">
           Grab the tissue and swipe UP. Let go past the stretch point to rip it
-          free — too short and it snaps back!
+          free — too short and it snaps back! Every 20th tissue is golden.
         </p>
       </div>
     </div>
@@ -468,6 +670,9 @@
       <div class="card">
         <h2 class="pause-title">Paused</h2>
         <button id="btn-resume" class="btn btn-big" type="button">Resume</button>
+        <button id="btn-pause-restart" class="btn btn-secondary btn-big" type="button">
+          Restart
+        </button>
         <button id="btn-pause-menu" class="btn btn-secondary btn-big" type="button">Menu</button>
       </div>
     </div>
@@ -477,6 +682,9 @@
         <h2 id="results-title">Box empty!</h2>
         <div id="results-time">00:00.0</div>
         <div id="results-avg"></div>
+        <div id="results-delta" hidden></div>
+        <div id="results-medal" hidden></div>
+        <div id="results-next-medal" hidden></div>
         <div id="results-size"></div>
         <div id="results-best"></div>
         <button id="btn-replay" class="btn btn-big" type="button">Replay</button>

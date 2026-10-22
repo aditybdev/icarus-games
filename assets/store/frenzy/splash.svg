@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2732 2732">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.42" r="0.95">
+      <stop offset="0" stop-color="#F4FAFF"/>
+      <stop offset="1" stop-color="#C9E8C4"/>
+    </radialGradient>
+    <linearGradient id="dog" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8A65C"/>
+      <stop offset="1" stop-color="#C97F33"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="2732" height="2732" fill="url(#bg)"/>
+
+  <g stroke="#9FCB8F" stroke-width="34" stroke-linecap="round" opacity="0.85">
+    <path d="M560 1180 H880"/>
+    <path d="M520 1290 H840"/>
+    <path d="M590 1400 H900"/>
+  </g>
+
+  <g transform="translate(1420 1250) scale(1.55)" fill="url(#dog)">
+    <path d="M-170 -60 Q-160 -120 -60 -118 L110 -112 Q190 -108 196 -50 Q200 2 150 22 L-120 34 Q-178 30 -170 -60 Z"/>
+    <path d="M150 -96 Q230 -170 268 -166 Q318 -162 322 -118 Q324 -88 300 -70 L316 -44 Q320 -20 292 -16 L236 -12 Q196 -14 188 -50 Z"/>
+    <path d="M300 -130 Q360 -136 372 -108 Q380 -84 350 -72 L306 -66 Z"/>
+    <path d="M232 -160 Q222 -216 258 -224 Q286 -228 282 -186 L276 -152 Z" fill="#B56F27"/>
+    <path d="M-168 -84 Q-236 -150 -218 -196 Q-206 -220 -184 -206 Q-162 -190 -160 -150 Q-158 -118 -140 -96 Z"/>
+    <path d="M150 10 L268 76 Q290 90 278 108 Q268 122 244 112 L120 44 Z"/>
+    <path d="M120 16 L216 108 Q232 126 214 138 Q198 148 180 132 L84 44 Z" fill="#B56F27"/>
+    <path d="M-150 16 L-266 82 Q-288 96 -274 112 Q-262 124 -240 112 L-118 44 Z"/>
+    <path d="M-116 22 L-208 118 Q-222 136 -204 146 Q-188 154 -172 136 L-80 50 Z" fill="#B56F27"/>
+  </g>
+
+  <circle cx="1770" cy="1040" r="17" fill="#4A2C12"/>
+
+  <text x="1366" y="2060" text-anchor="middle" font-family="Avenir Next, Trebuchet MS, sans-serif" font-size="150" font-weight="700" fill="#8A5A22">Four-Leg Frenzy</text>
+  <text x="1366" y="2190" text-anchor="middle" font-family="Avenir Next, Trebuchet MS, sans-serif" font-size="64" font-weight="500" fill="#A8B98F">ICARUS GAMES</text>
+</svg>

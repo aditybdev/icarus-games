@@ -94,3 +94,26 @@ export function mulberry32(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+
+/* --------------------- endless Order Rush (P1-1) --------------------- */
+
+/** Band shrink factor per endless order beyond ORDER_COUNT. */
+export const ENDLESS_BAND_SHRINK = 0.92;
+
+/** Floor for the endless band so orders stay humanly servable. */
+export const ENDLESS_MIN_BAND = 0.15;
+
+/**
+ * Generate one endless-mode order. Same target/flavor distribution as
+ * createOrders, but the band shrinks by ENDLESS_BAND_SHRINK per order past
+ * ORDER_COUNT (order ORDER_COUNT itself keeps the full band).
+ */
+export function createEndlessOrder(rng: () => number, index: number): Order {
+  const flavorIndex = Math.min(FLAVORS.length - 1, Math.floor(rng() * FLAVORS.length));
+  const raw = ORDER_MIN_TARGET + rng() * (ORDER_MAX_TARGET - ORDER_MIN_TARGET);
+  const quantized = Math.round(raw * 2) / 2;
+  const targetHeight = Math.min(ORDER_MAX_TARGET, Math.max(ORDER_MIN_TARGET, quantized));
+  const shrinks = Math.max(0, index - ORDER_COUNT + 1);
+  const band = Math.max(ENDLESS_MIN_BAND, ORDER_BAND * Math.pow(ENDLESS_BAND_SHRINK, shrinks));
+  return { index, flavor: FLAVORS[flavorIndex], targetHeight, band };
+}

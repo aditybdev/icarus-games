@@ -26,6 +26,8 @@ export class LegInput {
   private buttons: HTMLButtonElement[] = [];
   /** Called on the first user gesture (for audio unlock). */
   onFirstGesture: (() => void) | null = null;
+  /** Non-leg keys forwarded to the host: 'r' (restart) and 'enter' (confirm). */
+  onMetaKey: ((key: 'r' | 'enter') => void) | null = null;
   private gestured = false;
 
   attach(): void {
@@ -83,10 +85,19 @@ export class LegInput {
   private onKey(e: KeyboardEvent, down: boolean): void {
     if (e.repeat) return;
     const k = e.key.toLowerCase();
-    const leg = KEY_MAP[k];
-    if (leg === undefined) return;
     const tag = (e.target as HTMLElement | null)?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    // Meta keys never collide with the QWOP/ASKL leg map.
+    if (k === 'r' || k === 'enter') {
+      if (down) {
+        e.preventDefault();
+        this.gesture();
+        this.onMetaKey?.(k === 'r' ? 'r' : 'enter');
+      }
+      return;
+    }
+    const leg = KEY_MAP[k];
+    if (leg === undefined) return;
     e.preventDefault();
     this.gesture();
     if (down) {

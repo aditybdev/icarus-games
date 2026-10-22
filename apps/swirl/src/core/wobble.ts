@@ -21,12 +21,15 @@ import {
  * @param offset     signed horizontal offset between cone and nozzle (world units)
  * @param dt         elapsed seconds (already clamped by caller)
  * @param dispensing whether the player is currently extruding
+ * @param gainScale  scales wobble gain only (recovery unaffected); 1 = normal.
+ *                   Used by the turbo overdrive to raise risk over time.
  */
 export function updateWobble(
   wobble: number,
   offset: number,
   dt: number,
   dispensing: boolean,
+  gainScale = 1,
 ): number {
   let next = wobble;
   if (dispensing && dt > 0) {
@@ -34,7 +37,7 @@ export function updateWobble(
     if (off <= CENTER_DEAD_ZONE) {
       next -= WOBBLE_RECOVER * dt;
     } else {
-      next += (off - CENTER_DEAD_ZONE) * WOBBLE_GAIN * dt;
+      next += (off - CENTER_DEAD_ZONE) * WOBBLE_GAIN * gainScale * dt;
     }
   }
   if (!Number.isFinite(next) || next < 0) next = 0;

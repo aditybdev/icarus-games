@@ -52,7 +52,11 @@ export const LEVELS: Level[] = [
     id: 2,
     name: 'Letter Fold',
     paper: SQ,
-    creases: [{ id: 'c1', a: pt(0, 50), b: pt(100, 50) }],
+    // One distractor from level 2 on: crease choice starts immediately.
+    creases: [
+      { id: 'c1', a: pt(0, 50), b: pt(100, 50) },
+      { id: 'd1', a: pt(50, 0), b: pt(50, 100) },
+    ],
     solution: [{ creaseId: 'c1', side: -1 }],
     target: [pt(0, 50), pt(100, 50), pt(100, 100), pt(0, 100)],
   },
@@ -60,7 +64,10 @@ export const LEVELS: Level[] = [
     id: 3,
     name: 'Diagonal',
     paper: SQ,
-    creases: [{ id: 'c1', a: pt(0, 0), b: pt(100, 100) }],
+    creases: [
+      { id: 'c1', a: pt(0, 0), b: pt(100, 100) },
+      { id: 'd1', a: pt(0, 100), b: pt(100, 0) },
+    ],
     solution: [{ creaseId: 'c1', side: 1 }],
     target: [pt(0, 0), pt(100, 0), pt(100, 100)],
   },
@@ -68,7 +75,10 @@ export const LEVELS: Level[] = [
     id: 4,
     name: 'Sail Tuck',
     paper: [pt(0, 0), pt(120, 0), pt(0, 120)],
-    creases: [{ id: 'c1', a: pt(0, 60), b: pt(60, 0) }],
+    creases: [
+      { id: 'c1', a: pt(0, 60), b: pt(60, 0) },
+      { id: 'd1', a: pt(0, 30), b: pt(30, 0) },
+    ],
     solution: [{ creaseId: 'c1', side: -1 }],
     target: [pt(60, 0), pt(120, 0), pt(0, 120), pt(0, 60)],
   },
@@ -76,7 +86,10 @@ export const LEVELS: Level[] = [
     id: 5,
     name: 'Diamond Down',
     paper: [pt(50, 0), pt(100, 50), pt(50, 100), pt(0, 50)],
-    creases: [{ id: 'c1', a: pt(0, 50), b: pt(100, 50) }],
+    creases: [
+      { id: 'c1', a: pt(0, 50), b: pt(100, 50) },
+      { id: 'd1', a: pt(50, 0), b: pt(50, 100) },
+    ],
     solution: [{ creaseId: 'c1', side: -1 }],
     target: [pt(0, 50), pt(100, 50), pt(50, 100)],
   },
@@ -84,7 +97,10 @@ export const LEVELS: Level[] = [
     id: 6,
     name: 'Diamond Up',
     paper: [pt(50, 0), pt(100, 50), pt(50, 100), pt(0, 50)],
-    creases: [{ id: 'c1', a: pt(0, 50), b: pt(100, 50) }],
+    creases: [
+      { id: 'c1', a: pt(0, 50), b: pt(100, 50) },
+      { id: 'd1', a: pt(50, 0), b: pt(50, 100) },
+    ],
     solution: [{ creaseId: 'c1', side: 1 }],
     target: [pt(0, 50), pt(100, 50), pt(50, 0)],
   },
@@ -147,18 +163,20 @@ export const LEVELS: Level[] = [
     target: [pt(80, 0), pt(80, 80), pt(160, 80)],
   },
   {
+    // Swapped into the L7–15 2-par plateau (was level 17) to vary its shape
+    // mix; Gem moved to 17 as a breather between two 3-par levels.
     id: 11,
-    name: 'Gem',
-    paper: SQ,
+    name: 'Kite Fold',
+    paper: [pt(60, 0), pt(120, 60), pt(60, 120), pt(0, 60)],
     creases: [
-      { id: 'c1', a: pt(0, 50), b: pt(50, 0) },
-      { id: 'c2', a: pt(50, 100), b: pt(100, 50) },
+      { id: 'c1', a: pt(60, 0), b: pt(60, 120) },
+      { id: 'c2', a: pt(60, 60), b: pt(120, 60) },
     ],
     solution: [
-      { creaseId: 'c1', side: -1 },
-      { creaseId: 'c2', side: 1 },
+      { creaseId: 'c1', side: 1 },
+      { creaseId: 'c2', side: -1 },
     ],
-    target: [pt(50, 0), pt(100, 0), pt(100, 50), pt(50, 100), pt(0, 100), pt(0, 50)],
+    target: [pt(60, 60), pt(120, 60), pt(60, 120)],
   },
   {
     id: 12,
@@ -236,18 +254,20 @@ export const LEVELS: Level[] = [
     target: [pt(50, 50), pt(100, 50), pt(100, 100)],
   },
   {
+    // Was level 11; moved here as a 2-par breather between Crane Base and
+    // Tower (both 3-par), breaking the old flat L7–15 plateau.
     id: 17,
-    name: 'Kite Fold',
-    paper: [pt(60, 0), pt(120, 60), pt(60, 120), pt(0, 60)],
+    name: 'Gem',
+    paper: SQ,
     creases: [
-      { id: 'c1', a: pt(60, 0), b: pt(60, 120) },
-      { id: 'c2', a: pt(60, 60), b: pt(120, 60) },
+      { id: 'c1', a: pt(0, 50), b: pt(50, 0) },
+      { id: 'c2', a: pt(50, 100), b: pt(100, 50) },
     ],
     solution: [
-      { creaseId: 'c1', side: 1 },
-      { creaseId: 'c2', side: -1 },
+      { creaseId: 'c1', side: -1 },
+      { creaseId: 'c2', side: 1 },
     ],
-    target: [pt(60, 60), pt(120, 60), pt(60, 120)],
+    target: [pt(50, 0), pt(100, 0), pt(100, 50), pt(50, 100), pt(0, 100), pt(0, 50)],
   },
   {
     id: 18,

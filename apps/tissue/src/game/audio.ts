@@ -8,6 +8,10 @@ export class AudioSfx {
   private master: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private enabled = true;
+  /** Fever bed: pad oscillators + hat scheduler while a streak runs hot. */
+  private feverOn = false;
+  private feverPad: { osc: OscillatorNode[]; gain: GainNode } | null = null;
+  private feverTimer: ReturnType<typeof setInterval> | null = null;
 
   /** Create/resume the AudioContext. Call from a user-gesture handler. */
   unlock(): void {
@@ -27,6 +31,7 @@ export class AudioSfx {
         for (let i = 0; i < length; i += 1) data[i] = (Math.random() * 2 - 1) * 0.5;
       }
       if (this.ctx.state === 'suspended') void this.ctx.resume();
+      if (this.feverOn) this.startFeverBed(); // context arrived after fever
     } catch {
       /* audio unavailable */
     }
@@ -102,20 +107,20 @@ export class AudioSfx {
     this.tone(660, 540, 0.06, 'square', 0.1);
   }
 
-  /** Paper rustle while dragging a tissue upward. */
-  rustle(): void {
-    this.noise(0.06, 'bandpass', 1900, 2600, 0.22);
+  /** Paper rustle while dragging a tissue upward. Pitch scales with streak heat. */
+  rustle(pitch = 1): void {
+    this.noise(0.06, 'bandpass', 1900 * pitch, 2600 * pitch, 0.22);
   }
 
-  /** Soft pop when the perforation lets go. */
-  pop(): void {
-    this.tone(420, 170, 0.09, 'sine', 0.4);
-    this.noise(0.05, 'lowpass', 900, 500, 0.25);
+  /** Soft pop when the perforation lets go. Pitch scales with streak heat. */
+  pop(pitch = 1): void {
+    this.tone(420 * pitch, 170 * pitch, 0.09, 'sine', 0.4);
+    this.noise(0.05, 'lowpass', 900 * pitch, 500 * pitch, 0.25);
   }
 
-  /** Whoosh as the freed tissue flies off. */
-  whoosh(): void {
-    this.noise(0.32, 'bandpass', 500, 2600, 0.3);
+  /** Whoosh as the freed tissue flies off. Pitch scales with streak heat. */
+  whoosh(pitch = 1): void {
+    this.noise(0.32, 'bandpass', 500 * pitch, 2600 * pitch, 0.3);
   }
 
   /** Muted thup when a short pull snaps back into the box. */
@@ -136,5 +141,81 @@ export class AudioSfx {
     this.tone(830.61, 830.61, 0.16, 'triangle', 0.22, 0.09);
     this.tone(987.77, 987.77, 0.2, 'triangle', 0.22, 0.18);
     this.tone(1318.5, 1318.5, 0.34, 'triangle', 0.24, 0.27);
+  }
+
+  /** Descending two-note blip: a chain just lost its mercy / broke. */
+  descend(): void {
+    this.tone(520, 520, 0.09, 'square', 0.14);
+    this.tone(330, 330, 0.14, 'square', 0.14, 0.09);
+  }
+
+  /** Bonus arpeggio for the golden tissue (bright major run + sparkle). */
+  golden(): void {
+    this.tone(783.99, 783.99, 0.1, 'triangle', 0.2);
+    this.tone(987.77, 987.77, 0.1, 'triangle', 0.2, 0.07);
+    this.tone(1174.7, 1174.7, 0.1, 'triangle', 0.2, 0.14);
+    this.tone(1568, 1568, 0.22, 'triangle', 0.22, 0.21);
+    this.noise(0.18, 'highpass', 6500, 8000, 0.08, 0.14);
+  }
+
+  /* ------------------------------ fever bed ------------------------------ */
+
+  /**
+   * Fever mode audio bed: a soft pad (two detuned sines through a lowpass)
+   * plus light high-passed noise hats on a 250 ms scheduler. Layers in while
+   * a streak is hot; ramps out cleanly when it ends. No-ops until unlocked.
+   */
+  setFever(on: boolean): void {
+    if (on === this.feverOn) return;
+    this.feverOn = on;
+    if (on) this.startFeverBed();
+    else this.stopFeverBed();
+  }
+
+  private startFeverBed(): void {
+    if (!this.ctx || !this.master || this.feverPad) return;
+    try {
+      const t0 = this.ctx.currentTime;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(0.05, t0 + 0.9); // slow fade-in
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 900;
+      const osc = [196, 246.94].map((freq, i) => {
+        const o = this.ctx!.createOscillator();
+        o.type = 'sine';
+        o.frequency.value = freq * (i === 0 ? 1 : 1.003); // gentle detune shimmer
+        o.connect(filter);
+        o.start(t0);
+        return o;
+      });
+      filter.connect(gain).connect(this.master);
+      this.feverPad = { osc, gain };
+      this.feverTimer = setInterval(() => {
+        // Eighth-note hats at 120 bpm; volume follows the master gain.
+        this.noise(0.03, 'highpass', 7000, 7000, 0.045);
+      }, 250);
+    } catch {
+      /* audio unavailable */
+    }
+  }
+
+  private stopFeverBed(): void {
+    if (this.feverTimer !== null) {
+      clearInterval(this.feverTimer);
+      this.feverTimer = null;
+    }
+    const pad = this.feverPad;
+    this.feverPad = null;
+    if (!pad || !this.ctx) return;
+    try {
+      const t0 = this.ctx.currentTime;
+      pad.gain.gain.cancelScheduledValues(t0);
+      pad.gain.gain.setTargetAtTime(0, t0, 0.08);
+      for (const o of pad.osc) o.stop(t0 + 0.4);
+    } catch {
+      /* already stopped */
+    }
   }
 }

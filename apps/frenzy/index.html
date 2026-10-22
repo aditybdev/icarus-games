@@ -36,6 +36,16 @@
     }
     .hidden { display: none !important; }
 
+    /* ---------- countdown ---------- */
+    #countdown {
+      position: fixed; inset: 0; z-index: 25; pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+      font-size: clamp(4rem, 18vw, 9rem); font-weight: 900; color: var(--cream);
+      text-shadow: 0 4px 0 #2e6e1e, 0 8px 0 rgba(0,0,0,.25), 0 12px 26px rgba(0,0,0,.35);
+    }
+    .hint-line { font-size: .85rem; font-weight: 700; color: rgba(58,42,24,.65); }
+    body.touch .hint-line { display: none; }
+
     .btn {
       min-height: 64px; min-width: 220px; padding: 12px 28px;
       font-size: 1.25rem; font-weight: 800; font-family: inherit;
@@ -86,6 +96,30 @@
     #dist-fill { position: absolute; inset: 0 auto 0 0; width: 0%; background: linear-gradient(90deg, #58a83c, #8ccb66); border-radius: 11px; }
     #dist-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
       font-size: .8rem; font-weight: 900; color: var(--ink); }
+    /* sliding rank-pace carets: where you must be NOW for S/A/B */
+    .caret { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1.5px;
+      border-radius: 1px; box-shadow: 0 0 0 1px rgba(58,42,24,.35); }
+    #caret-s { background: #ffb400; }
+    #caret-a { background: #b8b8c8; }
+    #caret-b { background: #cd7f32; }
+
+    /* ---------- drama chips (fade in/out — no flashing) ---------- */
+    #penalty-chip {
+      position: fixed; top: calc(50px + var(--sat)); right: calc(70px + var(--sar));
+      z-index: 22; pointer-events: none;
+      background: #c0392b; color: #fff; font-weight: 900; font-size: 1.05rem;
+      border-radius: 12px; padding: 6px 14px; box-shadow: 0 3px 8px rgba(0,0,0,.3);
+      opacity: 0; transition: opacity .22s ease;
+    }
+    #toast {
+      position: fixed; top: calc(88px + var(--sat)); left: 50%; transform: translateX(-50%);
+      z-index: 22; pointer-events: none; white-space: nowrap;
+      background: rgba(255,247,230,.95); color: var(--ink); font-weight: 900; font-size: 1.3rem;
+      letter-spacing: .04em; border-radius: 14px; padding: 8px 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.3);
+      opacity: 0; transition: opacity .22s ease;
+    }
+    #penalty-chip.show, #toast.show { opacity: 1; }
     #btn-pause {
       pointer-events: auto; margin-left: auto;
       width: 48px; height: 48px; min-width: 0; border-radius: 12px; padding: 0;
@@ -132,6 +166,12 @@
       font-size: 1rem; font-weight: 900; color: #b3541e;
       background: #ffe1b3; border-radius: 10px; padding: 4px 14px;
     }
+    #results-rankup {
+      font-size: 1rem; font-weight: 900; color: #fff;
+      background: var(--green); border-radius: 10px; padding: 4px 14px;
+      box-shadow: 0 3px 0 var(--green-dark);
+    }
+    #results-ladder { font-size: .85rem; font-weight: 800; color: rgba(58,42,24,.7); }
     #results-stats { font-size: 1.05rem; font-weight: 700; line-height: 1.6; }
     .setrow {
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -158,13 +198,19 @@
 <body>
   <canvas id="scene"></canvas>
 
+  <div id="countdown" class="hidden">3</div>
+
   <div id="hud" class="hidden">
-    <div id="dist-bar"><div id="dist-fill"></div><div id="dist-text">0.0 m</div></div>
+    <div id="dist-bar"><div id="dist-fill"></div><div class="caret hidden" id="caret-s"></div><div class="caret hidden" id="caret-a"></div><div class="caret hidden" id="caret-b"></div><div id="dist-text">0.0 m</div></div>
     <div class="chip" id="hud-timer">90.0</div>
     <div class="chip" id="hud-speed">0.0 m/s</div>
+    <div class="chip hidden" id="hud-pace">pace: —</div>
     <div class="chip" id="hud-falls">Falls 0</div>
     <button class="btn" id="btn-pause" aria-label="Pause">II</button>
   </div>
+
+  <div id="penalty-chip" class="hidden">+3 s</div>
+  <div id="toast" class="hidden"></div>
 
   <div id="legpad" class="hidden">
     <div class="pad-row">
@@ -205,9 +251,12 @@
     <div class="panel">
       <h2 id="results-title">Finished!</h2>
       <div id="results-rank">S</div>
+      <div id="results-ladder" class="hidden"></div>
       <div id="results-best" class="hidden">NEW BEST!</div>
+      <div id="results-rankup" class="hidden">RANK UP!</div>
       <div id="results-stats"></div>
       <button class="btn" id="btn-retry">Retry</button>
+      <div class="hint-line">Press R or Enter to retry</div>
       <button class="btn secondary" id="btn-results-menu">Menu</button>
     </div>
   </div>
@@ -216,6 +265,7 @@
     <div class="panel">
       <h2>Paused</h2>
       <button class="btn" id="btn-resume">Resume</button>
+      <button class="btn secondary" id="btn-pause-restart">Restart</button>
       <button class="btn secondary" id="btn-pause-settings">Settings</button>
       <button class="btn secondary" id="btn-pause-menu">Menu</button>
     </div>

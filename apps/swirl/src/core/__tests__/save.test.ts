@@ -4,6 +4,7 @@ import {
   MAX_ORDER_STARS,
   normalizeSave,
   SAVE_VERSION,
+  withBestRushStars,
   withBestScore,
   withBestStars,
 } from '../save';
@@ -25,11 +26,17 @@ describe('normalizeSave', () => {
       v: SAVE_VERSION,
       best: 120,
       bestOrderStars: 6,
+      bestRushStars: 6,
     });
   });
 
   it('fills partial data with defaults', () => {
-    expect(normalizeSave({ best: 77 })).toEqual({ v: SAVE_VERSION, best: 77, bestOrderStars: 0 });
+    expect(normalizeSave({ best: 77 })).toEqual({
+      v: SAVE_VERSION,
+      best: 77,
+      bestOrderStars: 0,
+      bestRushStars: 0,
+    });
   });
 
   it('rejects negative, NaN and non-numeric values', () => {
@@ -57,13 +64,13 @@ describe('withBestScore', () => {
   });
 
   it('keeps the stored best on ties or lower scores', () => {
-    const base = { v: SAVE_VERSION, best: 250, bestOrderStars: 0 };
+    const base = { v: SAVE_VERSION, best: 250, bestOrderStars: 0, bestRushStars: 0 };
     expect(withBestScore(base, 250).improved).toBe(false);
     expect(withBestScore(base, 100).save.best).toBe(250);
   });
 
   it('does not mutate the input save', () => {
-    const base = { v: SAVE_VERSION, best: 10, bestOrderStars: 1 };
+    const base = { v: SAVE_VERSION, best: 10, bestOrderStars: 1, bestRushStars: 1 };
     withBestScore(base, 500);
     expect(base.best).toBe(10);
   });
@@ -82,12 +89,31 @@ describe('withBestStars', () => {
   });
 
   it('keeps the stored best otherwise', () => {
-    const base = { v: SAVE_VERSION, best: 0, bestOrderStars: 7 };
+    const base = { v: SAVE_VERSION, best: 0, bestOrderStars: 7, bestRushStars: 7 };
     expect(withBestStars(base, 7).improved).toBe(false);
     expect(withBestStars(base, 3).save.bestOrderStars).toBe(7);
   });
 
   it('clamps stars to the maximum', () => {
     expect(withBestStars(DEFAULT_SAVE, 99).save.bestOrderStars).toBe(MAX_ORDER_STARS);
+  });
+});
+
+describe('bestRushStars (endless)', () => {
+  it('migrates the legacy 0..9 best when the field is absent', () => {
+    expect(normalizeSave({ best: 10, bestOrderStars: 8 }).bestRushStars).toBe(8);
+    expect(normalizeSave(undefined).bestRushStars).toBe(0);
+  });
+
+  it('prefers the stored endless best over the legacy one', () => {
+    expect(normalizeSave({ bestOrderStars: 8, bestRushStars: 23 }).bestRushStars).toBe(23);
+  });
+
+  it('is uncapped and keeps the legacy field in step', () => {
+    const { save, improved } = withBestRushStars(DEFAULT_SAVE, 23);
+    expect(improved).toBe(true);
+    expect(save.bestRushStars).toBe(23);
+    expect(save.bestOrderStars).toBe(MAX_ORDER_STARS);
+    expect(withBestRushStars(save, 12).improved).toBe(false);
   });
 });

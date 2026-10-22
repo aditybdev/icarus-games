@@ -173,8 +173,8 @@ export function stepSim(s: SimState, input: SimInput, dt: number = DT, opts: Ste
   if (s.stumbleT <= 0) {
     const tilt = Math.abs(body.pitch);
     if (tilt > FLIP_RAD) {
-      // Full flip: count a fall, reset to the track with a time penalty.
-      s.falls++;
+      // Full flip: count a wipeout, reset to the track with a time penalty.
+      s.wipeouts++;
       s.penaltyMs += FALL_PENALTY_MS;
       body.x = Math.max(0, body.x - FALL_BACK_M);
       body.v = 0;
@@ -194,7 +194,7 @@ export function stepSim(s: SimState, input: SimInput, dt: number = DT, opts: Ste
       s.events.push({ type: 'fall' });
     } else if (tilt > STUMBLE_RAD) {
       // Stumble: lose speed, brief wild recovery, always auto-recovers.
-      s.falls++;
+      s.stumbles++;
       s.stumbleT = STUMBLE_T;
       body.v *= 0.45;
       body.pitchVel = -Math.sign(body.pitch) * 2 + (nextRandom(s) - 0.5) * 0.5;

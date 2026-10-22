@@ -4,14 +4,33 @@
  * results), platform wiring, render loop, and all mode logic. Pure rules
  * (scoring, wobble, orders, save) live in ./core and are unit-tested.
  */
+import * as THREE from 'three';
 import { createPlatform } from '@icarus/platform';
 import {
+  BETWEEN_ORDERS_HOLD,
+  BETWEEN_ORDERS_MIN,
+  CENTER_DEAD_ZONE,
   GROW_RATE,
   MAX_HEIGHT,
+  ORDER_CARD_TIME,
   ORDER_COUNT,
+  SLOW_MO_SCALE,
+  SLOW_MO_TIME,
+  TOPPLE_SETTLE_HOLD,
   TOPPLE_WOBBLE_RATIO,
+  TURBO_BEAT_DELAY,
 } from './core/constants';
 import {
+  bestMarkerFrac,
+  createNearMiss,
+  isNewBestPace,
+  TENSION_SHAKE_MAX,
+  tensionLevel,
+  updateNearMiss,
+  type NearMissState,
+} from './core/feedback';
+import {
+  createEndlessOrder,
   createOrders,
   FLAVOR_COLORS,
   mulberry32,
@@ -19,8 +38,22 @@ import {
   type Flavor,
   type Order,
 } from './core/orders';
-import { freeSwirlScore, heightToCm } from './core/scoring';
-import { normalizeSave, withBestScore, withBestStars, type SaveData } from './core/save';
+import {
+  createCombo,
+  createTurbo,
+  heightToCm,
+  multiplierFor,
+  totalFreeScore,
+  turboGainScale,
+  updateCombo,
+  updateTurbo,
+} from './core/scoring';
+import {
+  normalizeSave,
+  withBestRushStars,
+  withBestScore,
+  type SaveData,
+} from './core/save';
 import { neatness, shouldTopple, updateWobble, wobbleRatio } from './core/wobble';
 import { AudioSfx } from './game/audio';
 import { bindInput, steerWithKeys, type InputState } from './game/input';
@@ -61,6 +94,33 @@ let orders: Order[] = [];
 let orderIdx = 0;
 let totalStars = 0;
 let selectedFlavor: Flavor = 'vanilla';
+let endless = false;
+let rushRng: () => number = mulberry32(1);
+let lastServeStars = 0;
+let lastServeToppled = false;
+
+// Feedback state.
+let nearMiss: NearMissState = createNearMiss();
+let liveScore = 0;
+/** Session-only flag: "New best pace!" toast fires at most once per session. */
+let bestPaceToastShown = false;
+/** Free Swirl height milestones already celebrated this round (fractions of MAX_HEIGHT). */
+const MILESTONE_FRACS = [0.25, 0.5, 0.75] as const;
+let milestonesHit = 0;
+/** Rush: one-shot flash when the fill first enters the 3★ zone. */
+let bandFlashFired = false;
+/** Currently shown flavor-mismatch hint target (null = none). */
+let flavorHint: Flavor | null = null;
+/** Free Swirl combo + turbo overdrive state. */
+let combo = createCombo();
+let turbo = createTurbo();
+let turboBeatFired = false;
+let maxToastShown = false;
+/** Perfect-serve slow-mo time remaining (real seconds). */
+let slowMo = 0;
+const REDUCED_MOTION =
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+const tmpTip = new THREE.Vector3();
 
 // Timers / animation state.
 let time = 0;
@@ -85,6 +145,15 @@ const input: InputState = bindInput(
 
 /* ------------------------------- helpers ------------------------------- */
 
+/** Guarded haptics — a no-op on iOS/desktop, free juice on Android. */
+function vibrate(pattern: number | number[]): void {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* unsupported */
+  }
+}
+
 function currentLean(): number {
   return wobble * (wobbleRatio(wobble, height) / TOPPLE_WOBBLE_RATIO) * 0.9;
 }
@@ -108,10 +177,26 @@ function resetRound(): void {
   toppleAngle = 0;
   toppleVel = 0;
   toppleSettled = false;
+  liveScore = 0;
+  milestonesHit = 0;
+  combo = createCombo();
+  turbo = createTurbo();
+  turboBeatFired = false;
+  maxToastShown = false;
+  nearMiss = createNearMiss();
   input.pointerTargetX = null;
   world.swirl.reset();
   world.updateStrand(false);
+  world.setShake(0);
   audio.stopDispense();
+  audio.setTension(0);
+}
+
+/** Slow-mo + sprinkle burst + camera orbit on a perfect serve / new best. */
+function spectacle(palette: number[]): void {
+  if (REDUCED_MOTION) return;
+  slowMo = SLOW_MO_TIME;
+  world.sprinkles.burst(world.swirlTipWorld(tmpTip), palette);
 }
 
 function setFlavor(flavor: Flavor): void {
@@ -125,6 +210,21 @@ function syncHud(): void {
   ui.setHeight(height);
   ui.setHeightFill(height / MAX_HEIGHT);
   ui.setWobble(wobbleRatio(wobble, height) / TOPPLE_WOBBLE_RATIO);
+  if (mode === 'free') {
+    ui.setScore(liveScore);
+    ui.setCombo(multiplierFor(combo));
+    ui.setTurboMeter(height >= MAX_HEIGHT);
+  }
+  // Flavor-mismatch fairness: pulse the button the current order needs.
+  const order =
+    mode === 'rush' && (state === 'playing' || state === 'orderCard')
+      ? orders[orderIdx]
+      : undefined;
+  const hintTarget = order && selectedFlavor !== order.flavor ? order.flavor : null;
+  if (hintTarget !== flavorHint) {
+    flavorHint = hintTarget;
+    ui.setFlavorHint(hintTarget);
+  }
 }
 
 /* ------------------------------ mode flow ------------------------------ */
@@ -132,18 +232,25 @@ function syncHud(): void {
 function startFree(): void {
   mode = 'free';
   resetRound();
+  slowMo = 0;
+  world.setSpectacle(null);
   coneTargetX = 0;
   world.setConeX(0);
   setFlavor('vanilla');
   ui.showHUD('free');
   ui.setOrderLabel('');
+  ui.setBestMarker(bestMarkerFrac(save.best));
   syncHud();
   state = 'playing';
 }
 
 function startRush(): void {
   mode = 'rush';
-  orders = createOrders(mulberry32((Date.now() % 2147483647) >>> 0));
+  slowMo = 0;
+  world.setSpectacle(null);
+  rushRng = mulberry32((Date.now() % 2147483647) >>> 0);
+  orders = createOrders(rushRng);
+  endless = false;
   orderIdx = 0;
   totalStars = 0;
   showCurrentOrderCard();
@@ -152,16 +259,18 @@ function startRush(): void {
 function showCurrentOrderCard(): void {
   const order = orders[orderIdx];
   resetRound();
+  bandFlashFired = false;
   coneTargetX = 0;
   world.setConeX(0);
   ui.showHUD('rush');
-  ui.setOrderLabel(`Order ${orderIdx + 1}/${ORDER_COUNT}`);
+  ui.setOrderLabel(endless ? `Order ${orderIdx + 1}` : `Order ${orderIdx + 1}/${ORDER_COUNT}`);
   ui.setBand(order.targetHeight / MAX_HEIGHT, order.band / MAX_HEIGHT);
-  ui.showOrderCard(order, ORDER_COUNT);
+  ui.showOrderCard(order, endless ? null : ORDER_COUNT);
   setFlavor(selectedFlavor); // keep previous selection; player may switch
-  syncHud();
+  ui.setBestMarker(null); // Rush meter shows the target band instead
   state = 'orderCard';
-  stateTimer = 1.7;
+  stateTimer = ORDER_CARD_TIME;
+  syncHud();
 }
 
 function beginOrder(): void {
@@ -174,16 +283,22 @@ function finishFree(): void {
   swirlDirty = true;
   rebuildSwirl(true);
   audio.stopDispense();
+  audio.setTension(0);
+  world.setShake(0);
   audio.chime();
-  const score = freeSwirlScore(height, wobble);
+  const score = totalFreeScore(height, wobble, combo, turbo);
   const result = withBestScore(save, score);
   save = result.save;
-  if (result.improved) void platform.save(save);
+  if (result.improved) {
+    void platform.save(save);
+    spectacle([0xffb630, 0xff8fb2, 0x8fe3bd, 0xffffff]);
+  }
   platform.sendScore(score);
   const neat = Math.round(neatness(wobble, height) * 100);
   ui.showResults({
     title: 'Nice swirl!',
     scoreText: `${score} pts · ${heightToCm(height)} cm · ${neat}% neat`,
+    countUp: { to: score, suffix: ` pts · ${heightToCm(height)} cm · ${neat}% neat` },
     stars: null,
     bestText: result.improved ? `New best: ${save.best} pts!` : `Best: ${save.best} pts`,
     newBest: result.improved,
@@ -195,14 +310,21 @@ function serveOrder(toppled: boolean): void {
   const order = orders[orderIdx];
   const stars = toppled ? 0 : rateOrder(order, height, selectedFlavor);
   totalStars += stars;
+  lastServeStars = stars;
+  lastServeToppled = toppled;
   audio.stopDispense();
+  audio.setTension(0);
+  world.setShake(0);
   if (!toppled && height > 0.02) {
     // Round off the peak for the served swirl.
     finished = true;
     swirlDirty = true;
     rebuildSwirl(true);
   }
-  if (stars >= 2) {
+  if (stars === 3) {
+    audio.chime();
+    spectacle([FLAVOR_COLORS[order.flavor], 0xffffff, 0xffb630]);
+  } else if (stars >= 2) {
     audio.chime();
   } else if (stars === 1) {
     audio.starBlip(0);
@@ -211,36 +333,50 @@ function serveOrder(toppled: boolean): void {
   }
   ui.toast(toppled ? `It toppled! 0 stars` : `Order served: ${'★'.repeat(stars) || '0 stars'}`);
   state = 'between';
-  stateTimer = 1.5;
+  stateTimer = BETWEEN_ORDERS_HOLD;
 }
 
 function advanceAfterOrder(): void {
   orderIdx += 1;
-  if (orderIdx < ORDER_COUNT) {
+  if (orderIdx < orders.length) {
     showCurrentOrderCard();
     return;
   }
-  const result = withBestStars(save, totalStars);
+  const result = withBestRushStars(save, totalStars);
   save = result.save;
   if (result.improved) void platform.save(save);
   platform.sendScore(totalStars);
   ui.showResults({
-    title: 'Rush complete!',
-    scoreText: `Total: ${totalStars} / ${ORDER_COUNT * 3} stars`,
-    stars: { earned: totalStars, max: ORDER_COUNT * 3 },
+    title: lastServeToppled
+      ? 'It toppled!'
+      : endless
+        ? `Order ${orderIdx} served!`
+        : 'Rush complete!',
+    scoreText: `Total: ${totalStars} stars`,
+    stars: { earned: lastServeStars, max: 3 },
     bestText: result.improved
-      ? `New best: ${save.bestOrderStars}/9 stars!`
-      : `Best: ${save.bestOrderStars}/9 stars`,
+      ? `New best: ${save.bestRushStars} stars!`
+      : `Best: ${save.bestRushStars} stars`,
     newBest: result.improved,
+    continueRush: !lastServeToppled,
   });
   state = 'results';
+}
+
+function continueRush(): void {
+  endless = true;
+  orders.push(createEndlessOrder(rushRng, orderIdx));
+  showCurrentOrderCard();
 }
 
 function startTopple(): void {
   state = 'toppling';
   dispensing = false;
   audio.stopDispense();
+  audio.setTension(0);
+  world.setShake(0);
   audio.topple();
+  vibrate([40, 40, 90]);
   world.updateStrand(false);
   const lean = currentLean();
   toppleDir = lean >= 0 ? -1 : 1;
@@ -253,12 +389,14 @@ function startTopple(): void {
 function goToTitle(): void {
   state = 'title';
   resetRound();
+  slowMo = 0;
+  world.setSpectacle(null);
   world.setConeX(0);
   coneTargetX = 0;
   // Idle demo swirl on the title screen.
   setFlavor('vanilla');
   world.swirl.rebuild(3.0, 0, true);
-  ui.showTitle(save.best, save.bestOrderStars);
+  ui.showTitle(save.best, save.bestRushStars);
 }
 
 /* ---------------------------- pause / resume ---------------------------- */
@@ -271,7 +409,9 @@ function pauseGame(): void {
   cancelAnimationFrame(rafId);
   dispensing = false;
   audio.stopDispense();
+  audio.setTension(0);
   audio.setEnabled(false);
+  world.setShake(0);
   ui.setPaused(true);
 }
 
@@ -303,7 +443,25 @@ function updatePlaying(dt: number): void {
     height = Math.min(MAX_HEIGHT, height + GROW_RATE * dt);
     swirlDirty = true;
   }
-  wobble = updateWobble(wobble, offset, dt, dispensing);
+  // Combo streak: time dispensing inside the dead zone builds the multiplier.
+  combo = updateCombo(combo, dt, dispensing && Math.abs(offset) <= CENTER_DEAD_ZONE);
+  // Turbo overdrive past max height: bonus accrues while dispensing, and the
+  // wobble gain ramps the longer the player holds (risk/reward).
+  const isTurbo = mode === 'free' && height >= MAX_HEIGHT;
+  if (isTurbo) {
+    if (!maxToastShown) {
+      maxToastShown = true;
+      ui.toast('Max height!');
+    }
+    turbo = updateTurbo(turbo, dt, dispensing, neatness(wobble, height));
+    if (!turboBeatFired && turbo.time >= TURBO_BEAT_DELAY) {
+      turboBeatFired = true;
+      ui.toast('TURBO!');
+      audio.starBlip(2);
+      vibrate(25);
+    }
+  }
+  wobble = updateWobble(wobble, offset, dt, dispensing, isTurbo ? turboGainScale(turbo) : 1);
   if (swirlDirty) rebuildSwirl();
 
   // Sway: amplitude and frequency grow with the wobble ratio.
@@ -311,16 +469,50 @@ function updatePlaying(dt: number): void {
   const sway = Math.sin(time * (2.2 + ratio * 5)) * ratio * 0.1;
   world.swirl.group.rotation.z = sway;
 
+  // Near-topple tension: rising audio riser + camera micro-shake, and a
+  // "Saved it!" celebration when the ratio recovers from near-miss to safe.
+  const tension = tensionLevel(ratio);
+  audio.setTension(tension);
+  world.setShake(tension * TENSION_SHAKE_MAX);
+  if (updateNearMiss(nearMiss, ratio, height) === 'saved') {
+    ui.toast('Saved it!');
+    audio.starBlip(2);
+  }
+
+  // Free Swirl live score + one-time "New best pace!" celebration.
+  if (mode === 'free') {
+    liveScore = totalFreeScore(height, wobble, combo, turbo);
+    if (!bestPaceToastShown && isNewBestPace(liveScore, save.best)) {
+      bestPaceToastShown = true;
+      ui.toast('New best pace!');
+      audio.starBlip(1);
+    }
+    // Height milestones: toast + blip + haptic at 25/50/75% of max.
+    if (milestonesHit < MILESTONE_FRACS.length && height >= MAX_HEIGHT * MILESTONE_FRACS[milestonesHit]) {
+      const cm = heightToCm(MAX_HEIGHT * MILESTONE_FRACS[milestonesHit]);
+      milestonesHit += 1;
+      ui.toast(`${cm} cm!`);
+      audio.starBlip(0);
+      vibrate(25);
+    }
+  }
+
+  // Rush: one-time band flash when the fill enters the 3★ zone.
+  if (mode === 'rush' && !bandFlashFired) {
+    const order = orders[orderIdx];
+    if (order && Math.abs(height - order.targetHeight) <= order.band / 2) {
+      bandFlashFired = true;
+      ui.flashBand();
+      audio.starBlip(0);
+    }
+  }
+
   world.updateStrand(dispensing);
   syncHud();
 
   if (shouldTopple(wobble, height)) {
     startTopple();
     return;
-  }
-  if (mode === 'free' && height >= MAX_HEIGHT) {
-    ui.toast('Max height!');
-    finishFree();
   }
 }
 
@@ -335,20 +527,24 @@ function updateToppling(dt: number): void {
       if (Math.abs(toppleVel) < 0.6) toppleSettled = true;
     }
     world.swirl.group.rotation.z = toppleDir * toppleAngle;
-    if (toppleSettled) stateTimer = 0.4;
+    if (toppleSettled) stateTimer = TOPPLE_SETTLE_HOLD;
   } else {
     stateTimer -= dt;
     if (stateTimer <= 0) {
       if (mode === 'free') {
         finished = false;
-        const score = freeSwirlScore(height, wobble);
+        const score = totalFreeScore(height, wobble, combo, turbo);
         const result = withBestScore(save, score);
         save = result.save;
-        if (result.improved) void platform.save(save);
+        if (result.improved) {
+          void platform.save(save);
+          spectacle([0xffb630, 0xff8fb2, 0x8fe3bd, 0xffffff]);
+        }
         platform.sendScore(score);
         ui.showResults({
           title: 'It toppled!',
           scoreText: `${score} pts · ${heightToCm(height)} cm`,
+          countUp: { to: score, suffix: ` pts · ${heightToCm(height)} cm` },
           stars: null,
           bestText: result.improved ? `New best: ${save.best} pts!` : `Best: ${save.best} pts`,
           newBest: result.improved,
@@ -403,11 +599,18 @@ let readySent = false;
 
 function loop(now: number): void {
   rafId = requestAnimationFrame(loop);
-  const dt = Math.min((now - last) / 1000, 1 / 30);
+  const rawDt = Math.min((now - last) / 1000, 1 / 30);
   last = now;
+  let dt = rawDt;
+  if (slowMo > 0) {
+    slowMo = Math.max(0, slowMo - rawDt);
+    dt = rawDt * SLOW_MO_SCALE;
+    world.setSpectacle(1 - slowMo / SLOW_MO_TIME);
+    if (slowMo === 0) world.setSpectacle(null);
+  }
   time += dt;
   update(dt);
-  world.render(time);
+  world.render(time, dt);
   if (!readySent) {
     readySent = true;
     void platform.ready().catch(() => undefined);
@@ -415,6 +618,22 @@ function loop(now: number): void {
 }
 
 /* --------------------------------- boot --------------------------------- */
+
+// Tap-to-skip fast paths: order-intro card, topple settle, inter-order beat.
+// Ignores taps on real buttons (they keep their own behavior) and while
+// paused (the pause overlay owns input then).
+window.addEventListener('pointerdown', (e) => {
+  if (paused) return;
+  if ((e.target as HTMLElement | null)?.closest?.('button')) return;
+  if (state === 'orderCard') {
+    audio.unlock();
+    beginOrder();
+  } else if (state === 'toppling' && toppleSettled) {
+    stateTimer = 0;
+  } else if (state === 'between' && stateTimer <= BETWEEN_ORDERS_HOLD - BETWEEN_ORDERS_MIN) {
+    stateTimer = 0;
+  }
+});
 
 const ui = new UI({
   onMode(m) {
@@ -458,6 +677,14 @@ const ui = new UI({
   onFlavor(flavor) {
     audio.click();
     setFlavor(flavor);
+  },
+  onStarReveal(index) {
+    audio.starBlip(index);
+    vibrate(15);
+  },
+  onContinueRush() {
+    audio.click();
+    continueRush();
   },
 });
 

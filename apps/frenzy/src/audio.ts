@@ -122,6 +122,30 @@ export class AudioFx {
     osc.stop(t0 + 0.32);
   }
 
+  /** Descending sad-trombone wah for timeouts (wah-wah-wah-waaah). */
+  trombone(): void {
+    if (!this.ready) return;
+    const ac = this.ac!;
+    const notes = [392, 370, 349, 330]; // G4, F#4, F4, E4
+    notes.forEach((freq, i) => {
+      const last = i === notes.length - 1;
+      const t0 = ac.currentTime + i * 0.28;
+      const dur = last ? 0.9 : 0.3;
+      const osc = ac.createOscillator();
+      const gain = ac.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, t0);
+      // each note droops; the final one slides hard down for the "waaah"
+      osc.frequency.exponentialRampToValueAtTime(freq * (last ? 0.8 : 0.94), t0 + dur);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.16, t0 + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      osc.connect(gain).connect(this.master!);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.05);
+    });
+  }
+
   /** Finish fanfare arpeggio. */
   fanfare(): void {
     if (!this.ready) return;
@@ -140,6 +164,22 @@ export class AudioFx {
       osc.start(t0);
       osc.stop(t0 + 0.55);
     });
+  }
+
+  /** Countdown blip: pitch rises with each count; "go" is higher and longer. */
+  countBlip(go: boolean, step: number): void {
+    if (!this.ready) return;
+    const ac = this.ac!;
+    const t0 = ac.currentTime;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(go ? 880 : 440 + step * 110, t0);
+    gain.gain.setValueAtTime(0.2, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + (go ? 0.35 : 0.15));
+    osc.connect(gain).connect(this.master!);
+    osc.start(t0);
+    osc.stop(t0 + (go ? 0.4 : 0.18));
   }
 
   click(): void {

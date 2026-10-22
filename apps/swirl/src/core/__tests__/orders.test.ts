@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ORDER_COUNT } from '../constants';
 import {
+  createEndlessOrder,
   createOrders,
+  ENDLESS_BAND_SHRINK,
+  ENDLESS_MIN_BAND,
   FLAVORS,
   mulberry32,
   ORDER_BAND,
@@ -77,5 +80,28 @@ describe('rateOrder', () => {
 
   it('keeps 0 stars for a bad serve with the wrong flavor', () => {
     expect(rateOrder(makeOrder(), 0, 'mint')).toBe(0);
+  });
+});
+
+describe('createEndlessOrder', () => {
+  it('shrinks once at the first endless index (order 4)', () => {
+    const order = createEndlessOrder(mulberry32(7), ORDER_COUNT);
+    expect(order.band).toBeCloseTo(ORDER_BAND * ENDLESS_BAND_SHRINK, 9);
+  });
+
+  it('shrinks the band per order and floors it', () => {
+    const a = createEndlessOrder(mulberry32(7), ORDER_COUNT + 3);
+    expect(a.band).toBeCloseTo(ORDER_BAND * Math.pow(ENDLESS_BAND_SHRINK, 4), 9);
+    const b = createEndlessOrder(mulberry32(7), ORDER_COUNT + 500);
+    expect(b.band).toBe(ENDLESS_MIN_BAND);
+  });
+
+  it('stays inside the target range and is deterministic', () => {
+    const a = createEndlessOrder(mulberry32(42), 9);
+    const b = createEndlessOrder(mulberry32(42), 9);
+    expect(a).toEqual(b);
+    expect(a.targetHeight).toBeGreaterThanOrEqual(ORDER_MIN_TARGET);
+    expect(a.targetHeight).toBeLessThanOrEqual(ORDER_MAX_TARGET);
+    expect(a.index).toBe(9);
   });
 });

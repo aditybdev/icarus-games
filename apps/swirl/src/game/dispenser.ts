@@ -66,8 +66,14 @@ export function createDispenser(): Dispenser {
   head.position.set(0, 7.85, -0.85);
   group.add(head);
 
-  // Nozzle under the head, centered over the cone track.
-  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.5, 16), chromeMat);
+  // Nozzle under the head, centered over the cone track. Polished steel:
+  // higher metalness picks up the scene environment for a premium shine.
+  const nozzleMat = new THREE.MeshStandardMaterial({
+    color: 0xf2f4f6,
+    roughness: 0.22,
+    metalness: 0.7,
+  });
+  const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.5, 16), nozzleMat);
   nozzle.position.set(0, NOZZLE_TIP.y + 0.24, 0);
   nozzle.castShadow = true;
   group.add(nozzle);

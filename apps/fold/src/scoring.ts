@@ -23,6 +23,15 @@ export function shouldSuggestUndo(foldsUsed: number, optimal: number, matched: b
   return !matched && foldsUsed >= optimal + 2;
 }
 
+/**
+ * Live HUD preview: the star tier the player would earn if the level were
+ * completed right now (`foldsSoFar` may be below par mid-solve). Delegates to
+ * `starsFor` so the HUD preview can never drift from the awarded result.
+ */
+export function currentTier(foldsSoFar: number, optimal: number, hintsUsed: number): 1 | 2 | 3 {
+  return starsFor(foldsSoFar, optimal, hintsUsed);
+}
+
 export interface SaveData {
   v: number;
   /** stars[i] = best star count for level i (0 = not completed). */
@@ -57,4 +66,55 @@ export function normalizeSave(raw: unknown, levelCount: number): SaveData {
 
 export function totalStars(save: SaveData): number {
   return save.stars.reduce((a, b) => a + b, 0);
+}
+
+/**
+ * Proximity readout for the ghost panel: converts the engine's raw 0–1
+ * silhouette mismatch into a 0–100 "match %" (100 = perfect match).
+ * Non-finite input (defensive) reads as 0%.
+ */
+export function matchPercent(mismatch: number): number {
+  if (!Number.isFinite(mismatch)) return 0;
+  const m = Math.min(1, Math.max(0, mismatch));
+  return Math.round((1 - m) * 100);
+}
+
+/**
+ * Flawless streak: the number of consecutive 3-star completions ending at
+ * `levelIndex`, derived purely from the star array. 0 when that level's best
+ * is not 3★ (any <3★ completion resets the streak).
+ */
+export function flawlessStreak(stars: readonly number[], levelIndex: number): number {
+  if (levelIndex < 0 || levelIndex >= stars.length || stars[levelIndex] !== 3) return 0;
+  let n = 0;
+  for (let i = levelIndex; i >= 0 && stars[i] === 3; i--) n++;
+  return n;
+}
+
+export interface GalleryCard {
+  unlocked: boolean;
+  stars: number;
+}
+
+/**
+ * Origami gallery derivation: each completed level (any stars) unlocks its
+ * figure card, which displays the best star count earned.
+ */
+export function galleryCards(save: SaveData): GalleryCard[] {
+  return save.stars.map((s) => ({ unlocked: s > 0, stars: s }));
+}
+
+/**
+ * Title-screen "Continue" target: index of the highest unlocked level with
+ * no stars yet (i.e. where the player left off). Returns null on a fresh
+ * save (only level 1 unlocked) so the button stays hidden. If every
+ * unlocked level is complete, returns the last unlocked level for replay.
+ */
+export function continueTarget(save: SaveData): number | null {
+  const hi = Math.min(save.unlocked, save.stars.length) - 1;
+  if (hi < 1) return null; // unlocked <= 1: nothing to continue to
+  for (let i = hi; i >= 0; i--) {
+    if ((save.stars[i] ?? 0) === 0) return i;
+  }
+  return hi;
 }

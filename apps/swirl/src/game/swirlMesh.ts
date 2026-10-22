@@ -159,15 +159,23 @@ function buildTubeGeometry(
 
 export class SwirlMesh {
   readonly group = new THREE.Group();
-  private readonly material: THREE.MeshStandardMaterial;
+  private readonly material: THREE.MeshPhysicalMaterial;
   private tube: THREE.Mesh | null = null;
   private readonly tip: THREE.Mesh;
 
   constructor() {
-    this.material = new THREE.MeshStandardMaterial({
+    // Creamy soft-serve look: soft sheen backscatter + a subtle clearcoat
+    // so highlights roll gently across the ridges. Flavor color still comes
+    // straight from FLAVOR_COLORS via setFlavor / the swirlMaterial getter.
+    this.material = new THREE.MeshPhysicalMaterial({
       color: FLAVOR_COLORS.vanilla,
-      roughness: 0.38,
+      roughness: 0.34,
       metalness: 0,
+      sheen: 0.55,
+      sheenRoughness: 0.5,
+      sheenColor: new THREE.Color(0xfffaf2),
+      clearcoat: 0.22,
+      clearcoatRoughness: 0.55,
     });
     this.tip = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), this.material);
     this.tip.castShadow = true;

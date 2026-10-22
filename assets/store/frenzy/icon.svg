@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EAF6FF"/>
+      <stop offset="0.62" stop-color="#D6EEFF"/>
+      <stop offset="0.621" stop-color="#CDEFC9"/>
+      <stop offset="1" stop-color="#A8E0A4"/>
+    </linearGradient>
+    <linearGradient id="dog" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8A65C"/>
+      <stop offset="1" stop-color="#C97F33"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+
+  <!-- speed lines -->
+  <g stroke="#9FCB8F" stroke-width="26" stroke-linecap="round" opacity="0.85">
+    <path d="M96 470 H300"/>
+    <path d="M70 560 H260"/>
+    <path d="M120 650 H320"/>
+  </g>
+
+  <!-- running dog, mid-stride -->
+  <g transform="translate(560 540)" fill="url(#dog)">
+    <!-- body -->
+    <path d="M-170 -60 Q-160 -120 -60 -118 L110 -112 Q190 -108 196 -50 Q200 2 150 22 L-120 34 Q-178 30 -170 -60 Z"/>
+    <!-- chest + neck -->
+    <path d="M150 -96 Q210 -150 244 -148 Q286 -146 290 -108 Q292 -70 262 -52 L272 -30 Q274 -8 248 -6 L210 -4 Q178 -8 172 -48 Z"/>
+    <!-- head -->
+    <path d="M236 -160 Q240 -196 276 -200 Q318 -204 330 -172 Q338 -150 326 -132 L340 -118 Q352 -100 332 -90 L300 -78 Q262 -68 250 -96 Q240 -120 236 -160 Z"/>
+    <!-- snout -->
+    <path d="M322 -168 Q372 -172 382 -146 Q390 -124 362 -114 L326 -106 Z"/>
+    <!-- nose -->
+    <circle cx="374" cy="-140" r="12" fill="#4A2C12"/>
+    <!-- ear: big floppy -->
+    <path d="M250 -196 Q236 -256 276 -262 Q306 -266 300 -220 L294 -178 Q270 -160 250 -196 Z" fill="#B56F27"/>
+    <!-- tail up, wag curve -->
+    <path d="M-168 -84 Q-236 -150 -218 -196 Q-206 -220 -184 -206 Q-162 -190 -160 -150 Q-158 -118 -140 -96 Z"/>
+    <!-- front legs extended forward -->
+    <path d="M150 10 L268 76 Q290 90 278 108 Q268 122 244 112 L120 44 Z"/>
+    <path d="M120 16 L216 108 Q232 126 214 138 Q198 148 180 132 L84 44 Z" fill="#B56F27"/>
+    <!-- back legs extended back -->
+    <path d="M-150 16 L-266 82 Q-288 96 -274 112 Q-262 124 -240 112 L-118 44 Z"/>
+    <path d="M-116 22 L-208 118 Q-222 136 -204 146 Q-188 154 -172 136 L-80 50 Z" fill="#B56F27"/>
+  </g>
+
+  <!-- eye -->
+  <circle cx="858" cy="388" r="13" fill="#4A2C12"/>
+
+  <!-- dust puffs -->
+  <g fill="#D8C9A8">
+    <circle cx="240" cy="760" r="26"/>
+    <circle cx="300" cy="782" r="18"/>
+    <circle cx="186" cy="788" r="14"/>
+  </g>
+</svg>

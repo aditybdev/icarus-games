@@ -2,39 +2,69 @@
  * Tissue Rush — main orchestration.
  * App flow (menu / countdown / playing / results), platform wiring, render
  * loop and input glue. Pure rules (round state machine, timer, streaks,
- * save shape) live in ./core and are unit-tested with vitest.
+ * medals, save shape, blitz scoring) live in ./core and are unit-tested
+ * with vitest.
  */
 import { createPlatform } from '@icarus/platform';
 import type { RoundSize } from './core/constants';
+import { BLITZ_SIZE, blitzOver, blitzPointsFor, blitzTimeLeftMs } from './core/blitz';
+import { formatNextMedalMs, medalFor, nextMedalMs } from './core/medals';
 import {
+  cancelPull,
   createRound,
   elapsedMs,
+  feverActive,
   flightDone,
   formatMs,
+  formatPaceMs,
+  formatResultsDeltaMs,
   grab,
+  isGoldenPull,
   nextReady,
+  paceDeltaMs,
   release,
   scoreForRound,
+  streakAlive,
+  streakPitch,
   tension,
   updatePull,
   type RoundState,
 } from './core/round';
-import { normalizeSave, withBestTime, type SaveData } from './core/save';
+import {
+  normalizeSave,
+  withBestTime,
+  withRoundStats,
+  withSkin,
+  type SaveData,
+} from './core/save';
+import { BOX_SKINS, resolveSkin, skinUnlocked } from './core/skins';
 import { AudioSfx } from './game/audio';
 import { bindPointer } from './game/input';
 import { Renderer } from './game/renderer';
 import { UI } from './ui/ui';
 
 type AppState = 'menu' | 'countdown' | 'playing' | 'results';
+type GameMode = 'time' | 'blitz';
 
 const platform = createPlatform('tissue');
 const audio = new AudioSfx();
 const renderer = new Renderer(document.getElementById('stage') as HTMLElement);
 
+// Reduced-motion is cached once at boot (spec: no live toggle in this app).
+const reducedMotion =
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+renderer.setReducedMotion(reducedMotion);
+
 let save: SaveData = normalizeSave(undefined);
 let appState: AppState = 'menu';
 let paused = false;
 let round: RoundState | null = null;
+let mode: GameMode = 'time';
+let blitzScore = 0;
+let feverOn = false;
+/** Keeps a broken-chain chip flash on screen for a beat before it hides. */
+let streakChipHoldT = 0;
 
 /**
  * Fair game clock in ms: only advances while unpaused, so pausing freezes
@@ -50,41 +80,107 @@ let countdownT = 0;
 let countdownLabel = '';
 let lastRemaining = -1;
 
+/** Best-effort haptic tick; silently unsupported on iOS/desktop browsers. */
+function vibrate(pattern: number | number[]): void {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* vibration unsupported */
+  }
+}
+
+/** Fever mode (streak >= 10): audio bed + box glow + sparkle trails. */
+function setFever(on: boolean): void {
+  if (on === feverOn) return;
+  feverOn = on;
+  audio.setFever(on);
+  renderer.setFeverVisual(on);
+}
+
+function applySkin(): void {
+  renderer.setSkin(BOX_SKINS[resolveSkin(save)]);
+}
+
 /* ------------------------------ round flow ------------------------------ */
 
-function startRound(size: RoundSize): void {
+function startRound(
+  size: RoundSize,
+  opts: { skipCountdown?: boolean; mode?: GameMode } = {},
+): void {
   const threshold = Math.min(Math.max(window.innerHeight * 0.32, 140), 230);
   round = createRound(size, threshold);
+  mode = opts.mode ?? 'time';
+  blitzScore = 0;
+  setFever(false);
+  streakChipHoldT = 0;
   grabbing = false;
-  lastRemaining = size;
+  lastRemaining = -1;
   renderer.resetForRound();
+  renderer.setGoldNext(isGoldenPull(1));
   renderer.startPop(); // first tissue rises during the countdown
   appState = 'countdown';
-  countdownT = 2.9;
+  // Replays/restarts skip straight to a short "GO!" flash; the full 3-2-1
+  // is kept for the first entry from the menu.
+  countdownT = opts.skipCountdown ? 0.39 : 2.9;
   countdownLabel = '';
-  ui.showCountdown(size);
-  ui.showHUD(size);
+  ui.showCountdown(mode === 'blitz' ? 'Blitz — 30 s score attack!' : `Round of ${size}`);
+  if (opts.skipCountdown) ui.setCountdown('GO!');
+  ui.showHUD(mode === 'blitz' ? 0 : size, mode);
 }
 
 function finishRound(): void {
-  if (!round || appState !== 'playing') return;
+  if (!round || appState !== 'playing' || mode !== 'time') return;
   appState = 'results';
+  setFever(false);
   const ms = elapsedMs(round, clock);
   const avg = ms / round.size;
+  const prevBest = save.bestMs[round.size];
+  save = withRoundStats(save, round.pulled, round.peakStreak);
   const result = withBestTime(save, round.size, ms);
   save = result.save;
-  if (result.improved) void platform.save(save);
+  // Persist every finish: stats accumulate even when the best doesn't move.
+  void platform.save(save);
   platform.sendScore(scoreForRound(round.size, ms));
+  const medal = medalFor(round.size, ms);
   audio.chime();
   renderer.confettiBurst();
   ui.showResults({
     timeText: formatMs(ms),
     avgText: `${(avg / 1000).toFixed(2)}s average per tissue`,
+    deltaText: prevBest === null ? '' : formatResultsDeltaMs(ms - prevBest),
+    deltaAhead: prevBest !== null && ms < prevBest,
     size: round.size,
     bestText: result.improved
       ? `New best: ${formatMs(save.bestMs[round.size] ?? ms)}!`
       : `Best: ${formatMs(save.bestMs[round.size] ?? ms)}`,
     newBest: result.improved,
+    medal,
+    nextMedalText: formatNextMedalMs(nextMedalMs(round.size, ms)),
+  });
+}
+
+function finishBlitz(): void {
+  if (!round || appState !== 'playing' || mode !== 'blitz') return;
+  appState = 'results';
+  // The clock can expire mid-pull: abandon the held tissue cleanly.
+  cancelGrab();
+  setFever(false);
+  save = withRoundStats(save, round.pulled, round.peakStreak);
+  void platform.save(save);
+  platform.sendScore(blitzScore);
+  audio.chime();
+  renderer.confettiBurst();
+  ui.showResults({
+    timeText: String(blitzScore),
+    avgText: `${round.pulled} tissues in 30 s`,
+    deltaText: '',
+    deltaAhead: false,
+    size: round.size,
+    sizeText: 'Blitz — 30 s score attack',
+    bestText: '',
+    newBest: false,
+    medal: null,
+    nextMedalText: '',
   });
 }
 
@@ -92,9 +188,11 @@ function goToMenu(): void {
   appState = 'menu';
   round = null;
   grabbing = false;
+  setFever(false);
   renderer.resetForRound();
   renderer.startPop();
-  ui.showMenu(save.bestMs);
+  applySkin();
+  ui.showMenu(save);
 }
 
 /* ---------------------------- pause / resume ---------------------------- */
@@ -124,8 +222,9 @@ function cancelGrab(): void {
     return;
   }
   grabbing = false;
-  updatePull(round, 0); // force below-threshold
-  release(round, clock);
+  // Pause/pointercancel abandons the pull for free — it must not spend the
+  // chain's mercy (that cost is only for real mis-pulls via release()).
+  cancelPull(round);
   renderer.snapBack();
 }
 
@@ -147,38 +246,63 @@ bindPointer(renderer.domElement, {
       // The next sheet starts rising during the pull (not after the flyer
       // leaves the screen) so fast successive rips are physically possible.
       renderer.startPop();
-      audio.rustle();
+      audio.rustle(round.streak >= 2 ? streakPitch('speedy', round.streak) : 1);
     }
   },
   onMove(x, y) {
-    if (paused || !grabbing || !round) return;
+    if (paused || appState !== 'playing' || !grabbing || !round) return;
     renderer.moveGrab(x, y);
     updatePull(round, grabStartY - y);
     if (Math.abs(round.pullDistance - lastRustleDist) > 16) {
       lastRustleDist = round.pullDistance;
-      audio.rustle();
+      audio.rustle(round.streak >= 2 ? streakPitch('speedy', round.streak) : 1);
     }
   },
   onUp(x, y, vx, vy) {
-    if (paused || !grabbing || !round) return;
+    if (paused || appState !== 'playing' || !grabbing || !round) return;
     grabbing = false;
     const res = release(round, clock);
     if (res.accepted) {
-      renderer.launchFlyer(x, y, vx, vy);
+      const gold = isGoldenPull(round.pulled); // the sheet just detached
+      renderer.launchFlyer(x, y, vx, vy, gold);
+      renderer.setGoldNext(isGoldenPull(round.pulled + 1));
       // Progress to 'next' immediately; the flyer visual is independent and
       // the next sheet is already popping (started at grab time).
       flightDone(round);
-      audio.pop();
-      audio.whoosh();
+      const pitch = streakPitch(res.tier, res.streak);
+      audio.pop(pitch);
+      audio.whoosh(pitch);
+      if (gold) {
+        // Golden tissue: bonus arpeggio + gold burst + stronger haptic.
+        audio.golden();
+        renderer.goldBurst(x, y);
+        vibrate([12, 40, 12]);
+      } else {
+        vibrate(res.tier === 'blazing' ? 15 : 12);
+      }
+      if (mode === 'blitz') blitzScore += blitzPointsFor(res.streak);
+      setFever(feverActive(res.streak));
+      if (res.streak >= 2) ui.setStreak(res.streak, res.tier === 'blazing');
+      else ui.hideStreak(); // slow pull broke the chain
       if (res.tier !== 'none') {
         ui.streak(res.tier === 'blazing' ? 'Blazing!' : 'Speedy!', res.tier === 'blazing');
       }
       if (res.finished) {
-        finishRound();
+        if (mode === 'blitz') finishBlitz(); // cleared the endless box early
+        else finishRound();
       }
     } else {
       renderer.snapBack();
       audio.snap();
+      if (res.mercy || res.streakBroken) {
+        // Legible mis-pull cost: flash the chip + descending blip.
+        audio.descend();
+        ui.flashStreak();
+        if (res.streakBroken) {
+          streakChipHoldT = 0.5; // let the flash read before the chip hides
+          setFever(false);
+        }
+      }
     }
   },
   onCancel() {
@@ -208,12 +332,34 @@ function tick(dt: number): void {
     }
   }
 
+  if (streakChipHoldT > 0) streakChipHoldT = Math.max(0, streakChipHoldT - dt);
+
   if (round) {
     if (appState === 'playing') {
-      ui.setTimer(formatMs(elapsedMs(round, clock)));
-      if (round.remaining !== lastRemaining) {
-        lastRemaining = round.remaining;
-        ui.setRemaining(round.remaining);
+      if (mode === 'blitz') {
+        // Blitz: the HUD timer counts the window down; the chip shows score.
+        const left = blitzTimeLeftMs(elapsedMs(round, clock));
+        ui.setTimer(formatMs(left));
+        if (blitzOver(elapsedMs(round, clock))) {
+          finishBlitz();
+        }
+      } else {
+        ui.setTimer(formatMs(elapsedMs(round, clock)));
+        // Live pace vs the best time for this size (green ahead / red behind).
+        const pace = paceDeltaMs(round, save.bestMs[round.size], clock);
+        ui.setPace(pace === null ? null : formatPaceMs(pace), pace !== null && pace > 0);
+      }
+      const shown = mode === 'blitz' ? blitzScore : round.remaining;
+      if (shown !== lastRemaining) {
+        lastRemaining = shown;
+        ui.setRemaining(shown);
+      }
+      // The streak chip expires the moment the gap window lapses, so a slow
+      // pull or a fumbled mis-pull visibly drops the chain. A just-broken
+      // chain keeps its flash on screen for a beat (streakChipHoldT).
+      if (!streakAlive(round, clock)) {
+        if (round.streak >= 2) setFever(false); // chain lapsed mid-flight
+        if (streakChipHoldT <= 0) ui.hideStreak();
       }
     }
     renderer.update(dt, tension(round));
@@ -261,11 +407,18 @@ const ui = new UI({
     audio.unlock();
     audio.setEnabled(platform.isAudioEnabled() && !paused);
     audio.click();
-    startRound(size);
+    startRound(size, { mode: 'time' });
+  },
+  onBlitz() {
+    audio.unlock();
+    audio.setEnabled(platform.isAudioEnabled() && !paused);
+    audio.click();
+    startRound(BLITZ_SIZE, { mode: 'blitz' });
   },
   onReplay() {
     audio.click();
-    if (round) startRound(round.size);
+    // Instant replay: skip the 3-2-1, keep just the "GO!" flash.
+    if (round) startRound(round.size, { skipCountdown: true, mode });
     else goToMenu();
   },
   onMenu() {
@@ -283,6 +436,25 @@ const ui = new UI({
   },
   onPause() {
     pauseGame();
+  },
+  onRestart() {
+    audio.click();
+    if (!round) return;
+    if (paused) {
+      paused = false;
+      audio.setEnabled(platform.isAudioEnabled());
+      ui.setPaused(false);
+      last = performance.now();
+    }
+    startRound(round.size, { skipCountdown: true, mode });
+  },
+  onSkin(index) {
+    if (!skinUnlocked(index, save)) return;
+    audio.click();
+    save = withSkin(save, index);
+    void platform.save(save);
+    applySkin();
+    ui.showMenu(save);
   },
 });
 

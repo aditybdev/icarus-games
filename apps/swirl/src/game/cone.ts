@@ -17,9 +17,14 @@ export function createCone(): THREE.Group {
   const waffle = createWaffleTexture();
 
   // Outer shell: ConeGeometry has its apex at +Y, so flip it tip-down.
+  // The waffle map doubles as a subtle bump/roughness source so the
+  // crosshatch grooves read as embossed and catch the light differently.
   const outerMat = new THREE.MeshStandardMaterial({
     map: waffle,
-    roughness: 0.75,
+    bumpMap: waffle,
+    bumpScale: 0.02,
+    roughnessMap: waffle,
+    roughness: 0.8,
     metalness: 0,
   });
   const outer = new THREE.Mesh(

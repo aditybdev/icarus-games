@@ -49,7 +49,11 @@ export function bindInput(
     state.pointerHeld = true;
     const x = toWorldX(e.clientX, e.clientY);
     if (x !== null) state.pointerTargetX = x;
-    canvas.setPointerCapture(e.pointerId);
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      /* capture unsupported — pointerup still fires on the canvas */
+    }
     e.preventDefault();
   });
 

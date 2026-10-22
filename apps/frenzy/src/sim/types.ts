@@ -68,7 +68,10 @@ export interface SimState {
   penaltyMs: number;
   /** Furthest x ever reached. */
   distance: number;
-  falls: number;
+  /** Recoverable wobbles (|pitch| past ~35°). */
+  stumbles: number;
+  /** Full flips (|pitch| past ~80°) — these carry the time penalty. */
+  wipeouts: number;
   /** > 0 while stumbling / recovering after a fall. */
   stumbleT: number;
   finished: boolean;
@@ -157,7 +160,8 @@ export function createSim(mode: GameMode = 'race', seed = 1): SimState {
     timeMs: 0,
     penaltyMs: 0,
     distance: 0,
-    falls: 0,
+    stumbles: 0,
+    wipeouts: 0,
     stumbleT: 0,
     finished: false,
     timedOut: false,

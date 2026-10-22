@@ -8,6 +8,7 @@ export class AudioSfx {
   private master: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private dispense: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private tension: { osc: OscillatorNode; filter: BiquadFilterNode; gain: GainNode } | null = null;
   private enabled = true;
 
   /** Create/resume the AudioContext. Call from a user-gesture handler. */
@@ -127,6 +128,38 @@ export class AudioSfx {
       /* ignore */
     }
     this.dispense = null;
+  }
+
+  /**
+   * Continuous near-topple tension riser. `level` in [0, 1] maps to
+   * pitch/brightness/volume; 0 silences it. Nodes are created lazily on
+   * first use and reused, so per-frame calls allocate nothing. Output
+   * routes through the master gain, so host-audio-off mutes it too.
+   */
+  setTension(level: number): void {
+    if (!this.ctx || !this.master) return;
+    const l = Math.min(1, Math.max(0, level));
+    try {
+      if (!this.tension) {
+        if (l <= 0) return;
+        const osc = this.ctx.createOscillator();
+        osc.type = 'sawtooth';
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 2;
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0;
+        osc.connect(filter).connect(gain).connect(this.master);
+        osc.start();
+        this.tension = { osc, filter, gain };
+      }
+      const t = this.ctx.currentTime;
+      this.tension.osc.frequency.setTargetAtTime(85 + l * 165, t, 0.08);
+      this.tension.filter.frequency.setTargetAtTime(220 + l * 980, t, 0.08);
+      this.tension.gain.gain.setTargetAtTime(l * 0.14, t, 0.08);
+    } catch {
+      /* ignore */
+    }
   }
 
   /** Heavy wobble crash when the swirl topples. */
