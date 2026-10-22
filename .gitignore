@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.vite/
+coverage/
+.DS_Store
+*.local
+
+# Capacitor / native build artifacts
+apps/*/android/.gradle/
+apps/*/android/app/build/
+apps/*/android/build/
+apps/*/android/local.properties
+apps/*/ios/App/Pods/
+apps/*/ios/App/build/
+apps/*/ios/DerivedData/

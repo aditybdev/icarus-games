@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Swirl!</string>
+    <string name="title_activity_main">Swirl!</string>
+    <string name="package_name">com.icarusgames.swirl</string>
+    <string name="custom_url_scheme">com.icarusgames.swirl</string>
+</resources>

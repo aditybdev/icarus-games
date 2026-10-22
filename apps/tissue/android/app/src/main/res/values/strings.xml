@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Tissue Rush</string>
+    <string name="title_activity_main">Tissue Rush</string>
+    <string name="package_name">com.icarusgames.tissue</string>
+    <string name="custom_url_scheme">com.icarusgames.tissue</string>
+</resources>

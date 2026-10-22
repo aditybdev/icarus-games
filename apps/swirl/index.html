@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#ffd3e0" />
+    <title>Swirl!</title>
+    <script src="https://www.youtube.com/game_sdk/v0"></script>
+    <style>
+      :root {
+        --cream: #fff6ec;
+        --cream-deep: #ffe9d6;
+        --pink: #ff8fb2;
+        --pink-deep: #f26b97;
+        --pink-soft: #ffd3e0;
+        --mint: #8fe3bd;
+        --choc: #6b4a3a;
+        --card: rgba(255, 251, 245, 0.94);
+        --shadow: 0 10px 30px rgba(190, 120, 90, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        overscroll-behavior: none;
+        background: var(--cream);
+        color: var(--choc);
+        font-family:
+          ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", sans-serif;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      #stage {
+        position: fixed;
+        inset: 0;
+      }
+
+      #stage canvas {
+        display: block;
+        touch-action: none;
+      }
+
+      /* ---------- shared ---------- */
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 52px;
+        min-width: 52px;
+        padding: 0 28px;
+        border: none;
+        border-radius: 999px;
+        font: inherit;
+        font-size: 18px;
+        font-weight: 700;
+        color: #fff;
+        background: var(--pink);
+        box-shadow: 0 6px 0 var(--pink-deep), var(--shadow);
+        cursor: pointer;
+        transition: transform 0.08s ease, box-shadow 0.08s ease;
+      }
+
+      .btn:active {
+        transform: translateY(4px);
+        box-shadow: 0 2px 0 var(--pink-deep), var(--shadow);
+      }
+
+      .btn-secondary {
+        background: var(--mint);
+        box-shadow: 0 6px 0 #54c495, var(--shadow);
+        color: #155e3c;
+      }
+
+      .btn-secondary:active {
+        box-shadow: 0 2px 0 #54c495, var(--shadow);
+      }
+
+      .btn-big {
+        width: 100%;
+        font-size: 20px;
+        min-height: 58px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        min-height: 40px;
+        border-radius: 999px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .icon-btn {
+        width: 52px;
+        height: 52px;
+        border: none;
+        border-radius: 16px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+        color: var(--choc);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      #pause-btn {
+        margin-left: auto;
+      }
+
+      .screen {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: calc(env(safe-area-inset-top, 0px) + 16px)
+          calc(env(safe-area-inset-right, 0px) + 16px)
+          calc(env(safe-area-inset-bottom, 0px) + 16px)
+          calc(env(safe-area-inset-left, 0px) + 16px);
+        background: rgba(255, 241, 230, 0.72);
+      }
+
+      .card {
+        width: min(92vw, 380px);
+        padding: 28px 24px;
+        border-radius: 28px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ---------- title ---------- */
+
+      .logo {
+        margin: 0;
+        font-size: clamp(52px, 15vw, 72px);
+        font-weight: 900;
+        letter-spacing: -2px;
+        color: var(--pink);
+        text-shadow:
+          0 3px 0 #fff,
+          0 6px 0 var(--pink-deep),
+          0 10px 18px rgba(242, 107, 151, 0.35);
+      }
+
+      .logo-bang {
+        color: var(--mint);
+        text-shadow:
+          0 3px 0 #fff,
+          0 6px 0 #54c495,
+          0 10px 18px rgba(84, 196, 149, 0.35);
+      }
+
+      .tagline {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: #9a7460;
+      }
+
+      .best-line {
+        min-height: 20px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #b08a72;
+      }
+
+      .howto {
+        margin: 4px 0 0;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #9a7460;
+      }
+
+      /* ---------- HUD ---------- */
+
+      #hud {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        pointer-events: none;
+      }
+
+      #hud > * {
+        pointer-events: auto;
+      }
+
+      #topbar {
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 12px);
+        left: calc(env(safe-area-inset-left, 0px) + 12px);
+        right: calc(env(safe-area-inset-right, 0px) + 12px);
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        pointer-events: none;
+      }
+
+      #topbar > * {
+        pointer-events: auto;
+      }
+
+      #order-label {
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+      }
+
+      #flavor-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fff3dd;
+        box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.08);
+      }
+
+      /* height meter */
+      #meter {
+        position: absolute;
+        left: calc(env(safe-area-inset-left, 0px) + 14px);
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+
+      #meter-track {
+        position: relative;
+        width: 20px;
+        height: min(38vh, 300px);
+        border-radius: 999px;
+        background: rgba(255, 251, 245, 0.9);
+        box-shadow: var(--shadow), inset 0 0 0 2px rgba(190, 120, 90, 0.12);
+        overflow: hidden;
+      }
+
+      #meter-fill {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 0%;
+        border-radius: 999px;
+        background: linear-gradient(180deg, var(--pink) 0%, var(--pink-deep) 100%);
+        transition: height 0.08s linear;
+      }
+
+      #meter-band {
+        position: absolute;
+        left: 0;
+        right: 0;
+        background: rgba(84, 196, 149, 0.45);
+        border-top: 2px solid #54c495;
+        border-bottom: 2px solid #54c495;
+      }
+
+      #meter-label {
+        min-width: 64px;
+        text-align: center;
+        font-size: 15px;
+        font-weight: 800;
+        padding: 6px 8px;
+        border-radius: 999px;
+        background: var(--card);
+        box-shadow: var(--shadow);
+      }
+
+      /* wobble meter */
+      #wobble {
+        position: absolute;
+        left: calc(env(safe-area-inset-left, 0px) + 14px);
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      #wobble-track {
+        position: relative;
+        width: 128px;
+        height: 16px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #8fe3bd 0%, #ffe08a 55%, #ff7d7d 100%);
+        box-shadow: var(--shadow), inset 0 0 0 2px rgba(190, 120, 90, 0.12);
+      }
+
+      #wobble-dot {
+        position: absolute;
+        top: 50%;
+        left: 0%;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #fff;
+        border: 3px solid var(--choc);
+        transform: translate(-50%, -50%);
+        transition: left 0.06s linear;
+      }
+
+      #wobble.danger #wobble-dot {
+        border-color: #e23c3c;
+        animation: wobble-pulse 0.35s infinite alternate;
+      }
+
+      @keyframes wobble-pulse {
+        from { transform: translate(-50%, -50%) scale(1); }
+        to { transform: translate(-50%, -50%) scale(1.25); }
+      }
+
+      .hud-caption {
+        font-size: 14px;
+        font-weight: 700;
+        color: #9a7460;
+        padding-left: 4px;
+      }
+
+      /* right column: flavors + done */
+      #side-col {
+        position: absolute;
+        right: calc(env(safe-area-inset-right, 0px) + 14px);
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 14px;
+      }
+
+      #flavor-bar {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .flavor-btn {
+        position: relative;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.9);
+        background: var(--flavor, #fff3dd);
+        box-shadow: var(--shadow);
+        cursor: pointer;
+      }
+
+      .flavor-btn.active {
+        border-color: var(--choc);
+        transform: scale(1.08);
+      }
+
+      .flavor-btn-label {
+        position: absolute;
+        top: 50%;
+        right: 64px;
+        transform: translateY(-50%);
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--choc);
+        background: var(--card);
+        padding: 4px 10px;
+        border-radius: 999px;
+        box-shadow: var(--shadow);
+        opacity: 0;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+
+      .flavor-btn.active .flavor-btn-label {
+        opacity: 1;
+      }
+
+      /* ---------- order card / results ---------- */
+
+      #order-card .card {
+        gap: 8px;
+      }
+
+      #order-card-title {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: #b08a72;
+      }
+
+      #order-card-flavor {
+        margin: 0;
+        font-size: 34px;
+        font-weight: 900;
+      }
+
+      #order-card-target {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 700;
+        color: #9a7460;
+      }
+
+      #results-title {
+        margin: 0;
+        font-size: 30px;
+        font-weight: 900;
+        color: var(--choc);
+      }
+
+      #results-stars {
+        font-size: 38px;
+        letter-spacing: 4px;
+        min-height: 44px;
+      }
+
+      .star {
+        color: #e8d9c8;
+      }
+
+      .star.earned {
+        color: #ffb630;
+        text-shadow: 0 2px 6px rgba(255, 182, 48, 0.5);
+      }
+
+      #results-score {
+        font-size: 20px;
+        font-weight: 800;
+        color: #9a7460;
+      }
+
+      #results-best {
+        font-size: 15px;
+        font-weight: 700;
+        color: #b08a72;
+      }
+
+      #results-best.new-best {
+        color: var(--pink-deep);
+      }
+
+      /* ---------- toast ---------- */
+
+      #toast {
+        position: fixed;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 110px);
+        transform: translateX(-50%);
+        z-index: 40;
+        padding: 12px 22px;
+        border-radius: 999px;
+        background: var(--choc);
+        color: #fff;
+        font-size: 16px;
+        font-weight: 800;
+        box-shadow: var(--shadow);
+        white-space: nowrap;
+      }
+    </style>
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <div id="stage"></div>
+
+    <div id="hud" hidden>
+      <div id="topbar">
+        <div id="flavor-chip" class="chip" hidden>
+          <span id="flavor-dot"></span>
+          <span id="flavor-name">Vanilla</span>
+        </div>
+        <div id="order-label" class="chip" hidden></div>
+        <button id="pause-btn" class="icon-btn" type="button" aria-label="Pause">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+            <rect x="2" y="1" width="5" height="16" rx="2" fill="currentColor" />
+            <rect x="11" y="1" width="5" height="16" rx="2" fill="currentColor" />
+          </svg>
+        </button>
+      </div>
+
+      <div id="meter">
+        <div id="meter-track">
+          <div id="meter-band" hidden></div>
+          <div id="meter-fill"></div>
+        </div>
+        <div id="meter-label">0 cm</div>
+      </div>
+
+      <div id="wobble">
+        <div id="wobble-track"><div id="wobble-dot"></div></div>
+        <div class="hud-caption">Wobble</div>
+      </div>
+
+      <div id="side-col">
+        <div id="flavor-bar" hidden></div>
+        <button id="done-btn" class="btn" type="button">Done</button>
+      </div>
+    </div>
+
+    <div id="screen-title" class="screen">
+      <div class="card">
+        <h1 class="logo">Swirl<span class="logo-bang">!</span></h1>
+        <p class="tagline">Stack the tallest, neatest soft-serve.</p>
+        <div id="title-best" class="best-line"></div>
+        <button id="btn-free" class="btn btn-big" type="button">Free Swirl</button>
+        <button id="btn-rush" class="btn btn-secondary btn-big" type="button">Order Rush</button>
+        <p class="howto">Hold to dispense · drag to steer · stay centered or it topples!</p>
+      </div>
+    </div>
+
+    <div id="screen-pause" class="screen" hidden>
+      <div class="card">
+        <h2 id="results-title-pause" style="margin:0;font-size:30px;font-weight:900;">Paused</h2>
+        <button id="btn-resume" class="btn btn-big" type="button">Resume</button>
+        <button id="btn-pause-menu" class="btn btn-secondary btn-big" type="button">Menu</button>
+      </div>
+    </div>
+
+    <div id="screen-results" class="screen" hidden>
+      <div class="card">
+        <h2 id="results-title"></h2>
+        <div id="results-stars"></div>
+        <div id="results-score"></div>
+        <div id="results-best"></div>
+        <button id="btn-replay" class="btn btn-big" type="button">Replay</button>
+        <button id="btn-results-menu" class="btn btn-secondary btn-big" type="button">Menu</button>
+      </div>
+    </div>
+
+    <div id="order-card" class="screen" hidden>
+      <div class="card">
+        <p id="order-card-title"></p>
+        <h2 id="order-card-flavor"></h2>
+        <p id="order-card-target"></p>
+      </div>
+    </div>
+
+    <div id="toast" hidden></div>
+  </body>
+</html>

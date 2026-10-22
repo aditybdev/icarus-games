@@ -1,0 +1,225 @@
+import { describe, expect, it } from 'vitest';
+import {
+  BLAZING_GAP_MS,
+  PULL_THRESHOLD_PX,
+  SPEEDY_GAP_MS,
+} from '../constants';
+import {
+  createRound,
+  elapsedMs,
+  flightDone,
+  formatMs,
+  grab,
+  nextReady,
+  release,
+  scoreForRound,
+  tension,
+  tierForGap,
+  updatePull,
+  type RoundState,
+} from '../round';
+
+class FakeClock {
+  t = 0;
+  now(): number {
+    return this.t;
+  }
+  advance(ms: number): void {
+    this.t += ms;
+  }
+}
+
+/** Grab, drag up past the threshold (or a custom distance), and release. */
+function pullOnce(
+  round: RoundState,
+  clock: FakeClock,
+  distance = PULL_THRESHOLD_PX + 40,
+) {
+  // Complete the previous tissue's cycle if one is still in flight.
+  flightDone(round);
+  nextReady(round);
+  expect(grab(round, clock)).toBe(true);
+  updatePull(round, distance);
+  return release(round, clock);
+}
+
+describe('round timer', () => {
+  it('starts on the first grab, not at round creation', () => {
+    const clock = new FakeClock();
+    const round = createRound(25);
+
+    clock.advance(5000); // sitting on the ready screen
+    expect(elapsedMs(round, clock)).toBe(0);
+    expect(round.startedAt).toBeNull();
+
+    expect(grab(round, clock)).toBe(true);
+    expect(round.startedAt).toBe(5000);
+
+    clock.advance(600);
+    expect(elapsedMs(round, clock)).toBe(600);
+  });
+
+  it('stops exactly when remaining hits 0 and freezes afterwards', () => {
+    const clock = new FakeClock();
+    const round = createRound(25);
+
+    clock.advance(2000);
+    for (let i = 0; i < 24; i += 1) {
+      const res = pullOnce(round, clock);
+      expect(res.finished).toBe(false);
+      clock.advance(400);
+    }
+    expect(round.remaining).toBe(1);
+    flightDone(round);
+    nextReady(round);
+    expect(round.phase).toBe('idle');
+    expect(round.finishedAt).toBeNull();
+
+    clock.advance(123);
+    const finalRes = pullOnce(round, clock);
+    expect(finalRes.finished).toBe(true);
+    expect(round.phase).toBe('finished');
+    expect(round.remaining).toBe(0);
+    expect(round.finishedAt).toBe(clock.t);
+
+    const frozen = elapsedMs(round, clock);
+    expect(frozen).toBe(round.finishedAt! - round.startedAt!);
+    clock.advance(10000);
+    expect(elapsedMs(round, clock)).toBe(frozen);
+  });
+});
+
+describe('perforation threshold', () => {
+  it('a below-threshold release snaps back and does NOT decrement', () => {
+    const clock = new FakeClock();
+    const round = createRound(25);
+
+    expect(grab(round, clock)).toBe(true);
+    updatePull(round, round.threshold - 1);
+    expect(round.phase).toBe('pulling');
+    const res = release(round, clock);
+
+    expect(res.accepted).toBe(false);
+    expect(round.remaining).toBe(25);
+    expect(round.pulled).toBe(0);
+    expect(round.phase).toBe('idle'); // back to grabbable
+    expect(round.pullDistance).toBe(0);
+  });
+
+  it('an above-threshold release detaches and decrements', () => {
+    const clock = new FakeClock();
+    const round = createRound(50);
+
+    expect(grab(round, clock)).toBe(true);
+    updatePull(round, round.threshold + 1);
+    expect(tension(round)).toBe(1);
+    const res = release(round, clock);
+
+    expect(res.accepted).toBe(true);
+    expect(round.remaining).toBe(49);
+    expect(round.pulled).toBe(1);
+    expect(round.phase).toBe('flying');
+
+    flightDone(round);
+    expect(round.phase).toBe('next');
+    nextReady(round);
+    expect(round.phase).toBe('idle');
+  });
+
+  it('ignores grabs/releases in wrong phases', () => {
+    const clock = new FakeClock();
+    const round = createRound(25);
+
+    expect(grab(round, clock)).toBe(true);
+    expect(grab(round, clock)).toBe(false); // already holding one
+    updatePull(round, PULL_THRESHOLD_PX + 10);
+    release(round, clock);
+
+    // Now flying: no grab possible until the next tissue pops up.
+    expect(grab(round, clock)).toBe(false);
+    const res = release(round, clock);
+    expect(res.accepted).toBe(false);
+    expect(round.remaining).toBe(24);
+  });
+});
+
+describe('streak tiers', () => {
+  it('classifies gaps at the exact boundaries', () => {
+    expect(tierForGap(0)).toBe('blazing');
+    expect(tierForGap(BLAZING_GAP_MS)).toBe('blazing');
+    expect(tierForGap(BLAZING_GAP_MS + 1)).toBe('speedy');
+    expect(tierForGap(SPEEDY_GAP_MS)).toBe('speedy');
+    expect(tierForGap(SPEEDY_GAP_MS + 1)).toBe('none');
+  });
+
+  it('derives tiers from real pull gaps inside a round', () => {
+    const clock = new FakeClock();
+    const round = createRound(50);
+
+    // First pull never has a tier (no previous detach).
+    expect(pullOnce(round, clock).tier).toBe('none');
+    expect(round.streak).toBe(1);
+
+    clock.advance(200); // blazing gap
+    let res = pullOnce(round, clock);
+    expect(res.tier).toBe('blazing');
+    expect(res.streak).toBe(2);
+
+    clock.advance(300); // speedy gap
+    res = pullOnce(round, clock);
+    expect(res.tier).toBe('speedy');
+    expect(res.streak).toBe(3);
+
+    clock.advance(800); // too slow, streak resets
+    res = pullOnce(round, clock);
+    expect(res.tier).toBe('none');
+    expect(res.streak).toBe(1);
+  });
+});
+
+describe('full round simulation', () => {
+  it('a 50-pull round reaches finished with a sane time and score', () => {
+    const clock = new FakeClock();
+    const round = createRound(50);
+
+    clock.advance(1000); // player readies up; timer must not count this
+    let lastTier: string = 'none';
+    for (let i = 0; i < 50; i += 1) {
+      const res = pullOnce(round, clock);
+      lastTier = res.tier;
+      if (i < 49) {
+        expect(res.finished).toBe(false);
+        flightDone(round);
+        nextReady(round);
+        clock.advance(200);
+      }
+    }
+
+    expect(round.phase).toBe('finished');
+    expect(round.remaining).toBe(0);
+    expect(round.pulled).toBe(50);
+    expect(lastTier).toBe('blazing'); // 200 ms gaps
+    expect(round.streak).toBe(50);
+    expect(elapsedMs(round, clock)).toBe(49 * 200);
+
+    const score = scoreForRound(round.size, elapsedMs(round, clock));
+    // 50 tissues / 9.8 s ~= 5.1 tissues/s -> ~5102.
+    expect(score).toBe(Math.round((50 / 9.8) * 1000));
+  });
+});
+
+describe('formatting helpers', () => {
+  it('formats mm:ss.t', () => {
+    expect(formatMs(0)).toBe('00:00.0');
+    expect(formatMs(83456)).toBe('01:23.4');
+    expect(formatMs(59999)).toBe('00:59.9');
+    expect(formatMs(60000)).toBe('01:00.0');
+    expect(formatMs(3600000 + 12000 + 500)).toBe('60:12.5');
+  });
+
+  it('scores tissues per second x 1000', () => {
+    expect(scoreForRound(50, 10000)).toBe(5000);
+    expect(scoreForRound(25, 5000)).toBe(5000);
+    expect(scoreForRound(100, 0)).toBe(0);
+  });
+});
