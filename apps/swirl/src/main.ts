@@ -10,8 +10,16 @@ import {
   dailyDoneToday,
   dailyKeyUTC,
   dateSeedUTC,
+  defaultProfile,
   haptics,
+  icarusScore,
   installErrorHooks,
+  loadSharedProfile,
+  recordPlay,
+  saveSharedProfile,
+  setHapticsEnabled,
+  siblingForDay,
+  type IcarusProfile,
 } from '@icarus/platform';
 import {
   BETWEEN_ORDERS_HOLD,
@@ -56,6 +64,7 @@ import {
   updateTurbo,
 } from './core/scoring';
 import {
+  masteryFor,
   MAX_ORDER_STARS,
   normalizeSave,
   withBestRushStars,
@@ -68,7 +77,7 @@ import { neatness, shouldTopple, updateWobble, wobbleRatio } from './core/wobble
 import { AudioSfx } from './game/audio';
 import { bindInput, steerWithKeys, type InputState } from './game/input';
 import { World } from './game/world';
-import { UI, type Mode } from './ui/ui';
+import { setReducedMotion, UI, type Mode } from './ui/ui';
 
 type GameState = 'title' | 'orderCard' | 'playing' | 'toppling' | 'between' | 'results';
 
@@ -84,6 +93,10 @@ let mode: Mode = 'free';
 let paused = false;
 /** True when the user opened the pause overlay (vs. a host/visibility pause). */
 let manualPaused = false;
+/** User sound toggle (combined with the host audio gate). */
+let sfxOn = true;
+/** Cross-game profile (shared localStorage key on same-origin web). */
+let profile: IcarusProfile = defaultProfile();
 
 // Round state.
 let height = 0;
@@ -125,8 +138,15 @@ let turboBeatFired = false;
 let maxToastShown = false;
 /** Perfect-serve slow-mo time remaining (real seconds). */
 let slowMo = 0;
-const REDUCED_MOTION =
+const OS_REDUCED_MOTION =
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+/** User reduced-motion toggle from settings. */
+let userReducedMotion = false;
+
+function motionReduced(): boolean {
+  return OS_REDUCED_MOTION || userReducedMotion;
+}
+
 const tmpTip = new THREE.Vector3();
 
 // Timers / animation state.
@@ -146,7 +166,7 @@ const input: InputState = bindInput(
   (x, y) => world.pointerToWorldX(x, y),
   () => {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && !paused);
+    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
   },
 );
 
@@ -192,7 +212,7 @@ function resetRound(): void {
 
 /** Slow-mo + sprinkle burst + camera orbit on a perfect serve / new best. */
 function spectacle(palette: number[]): void {
-  if (REDUCED_MOTION) return;
+  if (motionReduced()) return;
   slowMo = SLOW_MO_TIME;
   world.sprinkles.burst(world.swirlTipWorld(tmpTip), palette);
 }
@@ -308,7 +328,9 @@ function finishFree(): void {
     spectacle([0xffb630, 0xff8fb2, 0x8fe3bd, 0xffffff]);
   }
   platform.sendScore(score);
+  mirrorMastery();
   const neat = Math.round(neatness(wobble, height) * 100);
+  const sib = siblingForDay('swirl');
   ui.showResults({
     title: 'Nice swirl!',
     scoreText: `${score} pts · ${heightToCm(height)} cm · ${neat}% neat`,
@@ -316,6 +338,7 @@ function finishFree(): void {
     stars: null,
     bestText: result.improved ? `New best: ${save.best} pts!` : `Best: ${save.best} pts`,
     newBest: result.improved,
+    promoText: `More from Icarus: ${sib.name} — ${sib.pitch}`,
   });
   state = 'results';
 }
@@ -375,6 +398,8 @@ function advanceAfterOrder(): void {
     void platform.save(save);
   }
   platform.sendScore(totalStars);
+  mirrorMastery();
+  const sib = siblingForDay('swirl');
   ui.showResults({
     title: lastServeToppled
       ? 'It toppled!'
@@ -388,6 +413,7 @@ function advanceAfterOrder(): void {
     bestText,
     newBest: celebrated,
     continueRush: !lastServeToppled,
+    promoText: `More from Icarus: ${sib.name} — ${sib.pitch}`,
   });
   state = 'results';
 }
@@ -425,13 +451,18 @@ function goToTitle(): void {
   // Idle demo swirl on the title screen.
   setFlavor('vanilla');
   world.swirl.rebuild(3.0, 0, true);
-  ui.showTitle(save.best, save.bestRushStars, {
-    streak: save.dailyStreak,
-    doneToday: dailyDoneToday(
-      { dailyLast: save.dailyLast, dailyStreak: save.dailyStreak },
-      dailyKeyUTC(),
-    ),
-  });
+  ui.showTitle(
+    save.best,
+    save.bestRushStars,
+    {
+      streak: save.dailyStreak,
+      doneToday: dailyDoneToday(
+        { dailyLast: save.dailyLast, dailyStreak: save.dailyStreak },
+        dailyKeyUTC(),
+      ),
+    },
+    icarusScore(profile),
+  );
 }
 
 /* ---------------------------- pause / resume ---------------------------- */
@@ -453,7 +484,7 @@ function pauseGame(): void {
 function resumeGame(): void {
   if (!paused) return;
   paused = false;
-  audio.setEnabled(platform.isAudioEnabled());
+  audio.setEnabled(platform.isAudioEnabled() && sfxOn);
   ui.setPaused(false);
   last = performance.now();
   rafId = requestAnimationFrame(loop);
@@ -576,6 +607,8 @@ function updateToppling(dt: number): void {
           spectacle([0xffb630, 0xff8fb2, 0x8fe3bd, 0xffffff]);
         }
         platform.sendScore(score);
+        mirrorMastery();
+        const sib = siblingForDay('swirl');
         ui.showResults({
           title: 'It toppled!',
           scoreText: `${score} pts · ${heightToCm(height)} cm`,
@@ -583,6 +616,7 @@ function updateToppling(dt: number): void {
           stars: null,
           bestText: result.improved ? `New best: ${save.best} pts!` : `Best: ${save.best} pts`,
           newBest: result.improved,
+          promoText: `More from Icarus: ${sib.name} — ${sib.pitch}`,
         });
         state = 'results';
       } else {
@@ -673,7 +707,7 @@ window.addEventListener('pointerdown', (e) => {
 const ui = new UI({
   onMode(m) {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && !paused);
+    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     audio.click();
     // Leaving the pause overlay via any path must restart the render loop.
     manualPaused = false;
@@ -725,9 +759,76 @@ const ui = new UI({
   },
 });
 
+/** Mirror the current mastery into the shared profile (never lowers it). */
+function mirrorMastery(): void {
+  const entry = profile.games.swirl;
+  if (!entry) return;
+  entry.mastery = Math.max(entry.mastery, masteryFor(save));
+  saveSharedProfile(profile);
+}
+
+/** Settings overlay: three toggles mirrored into the save and the profile. */
+function bindSettings(): void {
+  const overlay = document.getElementById('screen-settings')!;
+  const sfxBox = document.getElementById('set-sfx') as HTMLInputElement;
+  const hapticsBox = document.getElementById('set-haptics') as HTMLInputElement;
+  const motionBox = document.getElementById('set-motion') as HTMLInputElement;
+  sfxBox.checked = save.sfx !== false;
+  hapticsBox.checked = save.haptics !== false;
+  motionBox.checked = save.reducedMotion === true;
+  document.getElementById('btn-settings')!.addEventListener('click', () => {
+    audio.unlock();
+    audio.click();
+    overlay.hidden = false;
+  });
+  document.getElementById('btn-settings-close')!.addEventListener('click', () => {
+    audio.click();
+    overlay.hidden = true;
+  });
+  sfxBox.addEventListener('change', () => {
+    save = { ...save, sfx: sfxBox.checked };
+    sfxOn = sfxBox.checked;
+    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
+    profile.settings.sfx = sfxOn;
+    saveSharedProfile(profile);
+    void platform.save(save);
+  });
+  hapticsBox.addEventListener('change', () => {
+    save = { ...save, haptics: hapticsBox.checked };
+    setHapticsEnabled(hapticsBox.checked);
+    if (hapticsBox.checked) haptics(20);
+    profile.settings.haptics = hapticsBox.checked;
+    saveSharedProfile(profile);
+    void platform.save(save);
+  });
+  motionBox.addEventListener('change', () => {
+    save = { ...save, reducedMotion: motionBox.checked };
+    userReducedMotion = motionBox.checked;
+    setReducedMotion(motionReduced());
+    profile.settings.reducedMotion = motionBox.checked;
+    saveSharedProfile(profile);
+    void platform.save(save);
+  });
+}
+
 async function boot(): Promise<void> {
   save = normalizeSave(await platform.load(normalizeSave(undefined)));
   save = withDailyDay(save, dailyKeyUTC());
+  // Cross-game profile: settings fall back to the shared profile, then to
+  // defaults; this session is recorded with today's mastery.
+  profile = loadSharedProfile();
+  if (save.sfx === undefined) save.sfx = profile.settings.sfx;
+  if (save.haptics === undefined) save.haptics = profile.settings.haptics;
+  if (save.reducedMotion === undefined) {
+    save.reducedMotion = profile.settings.reducedMotion || OS_REDUCED_MOTION;
+  }
+  sfxOn = save.sfx !== false;
+  userReducedMotion = save.reducedMotion === true;
+  setReducedMotion(motionReduced());
+  setHapticsEnabled(save.haptics !== false);
+  recordPlay(profile, 'swirl', masteryFor(save));
+  saveSharedProfile(profile);
+  bindSettings();
   goToTitle();
   window.addEventListener('resize', () => world.resize());
   platform.bindLifecycle({
@@ -737,7 +838,7 @@ async function boot(): Promise<void> {
     isManualPause: () => manualPaused,
   });
   platform.onAudioEnabledChange((enabled) => {
-    audio.setEnabled(enabled && !paused);
+    audio.setEnabled(enabled && sfxOn && !paused);
   });
   rafId = requestAnimationFrame(loop);
 }

@@ -5,6 +5,7 @@ import {
   defaultSave,
   flawlessStreak,
   galleryCards,
+  masteryFor,
   matchPercent,
   normalizeSave,
   shouldSuggestUndo,
@@ -228,5 +229,34 @@ describe('daily save fields (Daily Fold)', () => {
       '2026-03-14',
     );
     expect(s.dailyBestStars).toBe(0);
+  });
+});
+
+describe('masteryFor', () => {
+  it('is 0 with no stars and 1000 at a full clear', () => {
+    expect(masteryFor(defaultSave(30))).toBe(0);
+    const full = defaultSave(30);
+    full.stars.fill(3);
+    expect(masteryFor(full)).toBe(1000);
+  });
+
+  it('is linear in total stars', () => {
+    const save = defaultSave(30);
+    save.stars[0] = 3;
+    save.stars[1] = 3;
+    save.stars[2] = 3; // 9 of 90
+    expect(masteryFor(save)).toBe(100);
+  });
+
+  it('is 0 for an empty level list (defensive)', () => {
+    expect(masteryFor(defaultSave(0))).toBe(0);
+  });
+});
+
+describe('normalizeSave settings passthrough', () => {
+  it('keeps boolean settings and omits non-booleans', () => {
+    const save = normalizeSave({ v: 1, stars: [3], unlocked: 1, sfx: false, haptics: 1 }, 30);
+    expect(save.sfx).toBe(false);
+    expect(save.haptics).toBeUndefined();
   });
 });

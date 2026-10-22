@@ -22,6 +22,10 @@ export interface SaveData {
   dailyStreak: number;
   /** Best total stars earned on today's Daily Rush (resets each day). */
   dailyBestStars: number;
+  /** User settings toggles; undefined = on / OS default. */
+  sfx?: boolean;
+  haptics?: boolean;
+  reducedMotion?: boolean;
 }
 
 export const DEFAULT_SAVE: SaveData = {
@@ -49,7 +53,7 @@ function toNonNegativeInt(value: unknown, max: number): number {
 export function normalizeSave(raw: unknown): SaveData {
   if (typeof raw !== 'object' || raw === null) return { ...DEFAULT_SAVE };
   const r = raw as Record<string, unknown>;
-  return {
+  const save: SaveData = {
     v: SAVE_VERSION,
     best: toNonNegativeInt(r.best, Number.MAX_SAFE_INTEGER),
     bestOrderStars: toNonNegativeInt(r.bestOrderStars, MAX_ORDER_STARS),
@@ -59,6 +63,20 @@ export function normalizeSave(raw: unknown): SaveData {
     dailyStreak: toNonNegativeInt(r.dailyStreak, Number.MAX_SAFE_INTEGER),
     dailyBestStars: toNonNegativeInt(r.dailyBestStars, MAX_ORDER_STARS),
   };
+  if (typeof r.sfx === 'boolean') save.sfx = r.sfx;
+  if (typeof r.haptics === 'boolean') save.haptics = r.haptics;
+  if (typeof r.reducedMotion === 'boolean') save.reducedMotion = r.reducedMotion;
+  return save;
+}
+
+/**
+ * Icarus mastery 0–1000: Free Swirl best vs the ~1060 soft cap (70%) plus
+ * the 0–9 rush-stars ladder (30%).
+ */
+export function masteryFor(save: SaveData): number {
+  const free = Math.min(1060, save.best) / 1060;
+  const rush = Math.min(MAX_ORDER_STARS, save.bestRushStars) / MAX_ORDER_STARS;
+  return Math.round(free * 700 + rush * 300);
 }
 
 /** Return an updated save if `score` beats the stored Free Swirl best. */

@@ -12,6 +12,8 @@ export class AudioFx {
   private noiseBuffer: AudioBuffer | null = null;
   private hostEnabled = true;
   private paused = false;
+  /** User sound-effects toggle (settings), combined with the host gate. */
+  private sfxOn = true;
 
   constructor(platform: Platform) {
     this.hostEnabled = platform.isAudioEnabled();
@@ -19,6 +21,11 @@ export class AudioFx {
       this.hostEnabled = enabled;
       this.applyGain();
     });
+  }
+
+  setSfx(on: boolean): void {
+    this.sfxOn = on;
+    this.applyGain();
   }
 
   /** Call from a user gesture (pointerdown) to create/resume the context. */
@@ -59,7 +66,7 @@ export class AudioFx {
 
   private applyGain(): void {
     if (!this.ctx || !this.master) return;
-    const target = this.hostEnabled && !this.paused ? 0.55 : 0;
+    const target = this.hostEnabled && this.sfxOn && !this.paused ? 0.55 : 0;
     this.master.gain.setTargetAtTime(target, this.ctx.currentTime, 0.05);
   }
 

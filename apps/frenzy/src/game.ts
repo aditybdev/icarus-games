@@ -7,8 +7,16 @@ import {
   dailyDoneToday,
   dailyKeyUTC,
   dateSeedUTC,
+  defaultProfile,
   haptics,
+  icarusScore,
+  loadSharedProfile,
   osPrefersReducedMotion,
+  recordPlay,
+  saveSharedProfile,
+  setHapticsEnabled,
+  siblingForDay,
+  type IcarusProfile,
 } from '@icarus/platform';
 import { AudioFx } from './audio';
 import { LegInput } from './input';
@@ -35,6 +43,7 @@ import {
   effectiveTimeMs,
   formatMetres,
   formatSeconds,
+  masteryFor,
   paceBarPct,
   pbPaceX,
   projectedRank,
@@ -82,6 +91,8 @@ export class Game {
   private manualPaused = false;
   /** True while the current run is the Icarus Daily Race (date-seeded). */
   private daily = false;
+  /** Cross-game profile (shared localStorage key on same-origin web). */
+  private profile: IcarusProfile = defaultProfile();
 
   constructor(private platform: Platform) {
     const canvas = $('scene') as HTMLCanvasElement;
@@ -97,11 +108,20 @@ export class Game {
       await this.platform.load<SaveData>({ ...DEFAULT_SAVE }),
       dailyKeyUTC(),
     );
+    // Cross-game profile: settings fall back to the shared profile, then to
+    // defaults; this session is recorded with today's mastery.
+    this.profile = loadSharedProfile();
+    if (this.save.sfx === undefined) this.save.sfx = this.profile.settings.sfx;
+    if (this.save.haptics === undefined) this.save.haptics = this.profile.settings.haptics;
     // Reduced motion defaults to the OS preference until the user overrides
     // it in settings (undefined = never touched the toggle).
     if (this.save.reducedMotion === undefined) {
-      this.save.reducedMotion = osPrefersReducedMotion();
+      this.save.reducedMotion =
+        this.profile.settings.reducedMotion || osPrefersReducedMotion();
     }
+    setHapticsEnabled(this.save.haptics !== false);
+    recordPlay(this.profile, 'frenzy', masteryFor(this.save.bestTimeMs));
+    saveSharedProfile(this.profile);
 
     this.input.attach();
     window.addEventListener('resize', () => this.renderer.resize());
@@ -149,11 +169,23 @@ export class Game {
 
     $('set-motion').addEventListener('change', (e) => {
       this.save.reducedMotion = (e.target as HTMLInputElement).checked;
+      this.profile.settings.reducedMotion = this.save.reducedMotion;
+      saveSharedProfile(this.profile);
       void this.platform.save(this.save);
     });
     $('set-sfx').addEventListener('change', (e) => {
       this.save.sfx = (e.target as HTMLInputElement).checked;
       this.audio.setSfx(this.save.sfx !== false);
+      this.profile.settings.sfx = this.save.sfx;
+      saveSharedProfile(this.profile);
+      void this.platform.save(this.save);
+    });
+    $('set-haptics').addEventListener('change', (e) => {
+      this.save.haptics = (e.target as HTMLInputElement).checked;
+      setHapticsEnabled(this.save.haptics);
+      if (this.save.haptics) haptics(20);
+      this.profile.settings.haptics = this.save.haptics;
+      saveSharedProfile(this.profile);
       void this.platform.save(this.save);
     });
   }
@@ -161,6 +193,7 @@ export class Game {
   private applySettingsToUi(): void {
     ($('set-motion') as HTMLInputElement).checked = this.save.reducedMotion === true;
     ($('set-sfx') as HTMLInputElement).checked = this.save.sfx !== false;
+    ($('set-haptics') as HTMLInputElement).checked = this.save.haptics !== false;
     this.audio.setSfx(this.save.sfx !== false);
   }
 
@@ -200,6 +233,12 @@ export class Game {
     }
   }
 
+  private updateScoreLine(): void {
+    const score = icarusScore(this.profile);
+    $('score-line').textContent =
+      score > 0 ? `Icarus Score ${score.toLocaleString()}` : '';
+  }
+
   // ------------------------------------------------------------- screens
 
   private setScreen(name: UiState): void {
@@ -230,6 +269,7 @@ export class Game {
     this.audio.setPaused(false);
     this.updateBestLine();
     this.updateDailyLine();
+    this.updateScoreLine();
     this.setScreen('title');
   }
 
@@ -510,6 +550,12 @@ export class Game {
     }
     // A daily completion or a new best must be persisted immediately.
     if ((this.daily && s.finished) || newBest) void this.platform.save(this.save);
+    // Mastery may have grown — mirror it into the shared profile.
+    const entry = this.profile.games.frenzy;
+    if (entry) {
+      entry.mastery = Math.max(entry.mastery, masteryFor(this.save.bestTimeMs));
+      saveSharedProfile(this.profile);
+    }
     this.platform.sendScore(score);
 
     $('results-title').textContent = s.finished
@@ -555,6 +601,11 @@ export class Game {
       div.textContent = line;
       stats.appendChild(div);
     }
+
+    // "More from Icarus" — a day-rotated sibling pitch (no link: outbound
+    // navigation is policy-gated on Playables).
+    const sib = siblingForDay('frenzy');
+    $('promo-line').textContent = `More from Icarus: ${sib.name} — ${sib.pitch}`;
 
     this.input.releaseAll();
     this.setScreen('results');

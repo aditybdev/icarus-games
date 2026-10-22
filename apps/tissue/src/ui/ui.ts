@@ -29,6 +29,8 @@ export interface ResultsData {
   dailyBestText?: string;
   /** Daily mode: current streak line ("" hides it). */
   dailyStreakText?: string;
+  /** "More from Icarus" sibling pitch line ("" hides it). */
+  promoText?: string;
 }
 
 export interface UICallbacks {
@@ -122,7 +124,7 @@ export class UI {
     this.screenResults.hidden = true;
   }
 
-  showMenu(save: SaveData): void {
+  showMenu(save: SaveData, icarusScore = 0): void {
     this.hideScreens();
     this.hud.hidden = true;
     for (const size of ROUND_SIZES) {
@@ -143,6 +145,9 @@ export class UI {
     } else {
       this.menuStats.hidden = true;
     }
+    const scoreLine = el('score-line');
+    scoreLine.textContent = icarusScore > 0 ? `Icarus Score ${icarusScore.toLocaleString()}` : '';
+    scoreLine.hidden = icarusScore <= 0;
     // Skin picker: unlocked dots are tappable, locked ones greyed out.
     BOX_SKINS.forEach((skin, index) => {
       const dot = this.skinDots[index];
@@ -303,6 +308,9 @@ export class UI {
     const dailyStreakText = data.dailyStreakText ?? '';
     this.resultsDailyStreak.textContent = dailyStreakText;
     this.resultsDailyStreak.hidden = dailyStreakText === '';
+    const promo = el('results-promo');
+    promo.textContent = data.promoText ?? '';
+    promo.hidden = !data.promoText;
     this.screenResults.hidden = false;
   }
 }

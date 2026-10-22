@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ROUND_SIZES } from '../constants';
 import {
   emptySave,
+  masteryFor,
   normalizeSave,
   withBestTime,
   withDailyCompletion,
@@ -246,5 +247,44 @@ describe('daily completion', () => {
     expect(afterGap.streak).toBe(1);
     expect(afterGap.improved).toBe(true);
     expect(afterGap.save.dailyBestMs).toBe(22000);
+  });
+});
+
+describe('masteryFor', () => {
+  it('is 0 with no finishes and 1000 at gold pace on all sizes', () => {
+    expect(masteryFor(emptySave())).toBe(0);
+    const save = emptySave();
+    save.bestMs = { 25: 15500, 50: 32000, 100: 65000 };
+    expect(masteryFor(save)).toBe(1000);
+  });
+
+  it('any finish earns 200 per size; anchors interpolate within bands', () => {
+    const save = emptySave();
+    save.bestMs = { 25: 40000, 50: null, 100: null };
+    expect(masteryFor(save)).toBe(Math.round(200 / 3));
+    const bronze = emptySave();
+    bronze.bestMs = { 25: 30000, 50: 62000, 100: 130000 };
+    expect(masteryFor(bronze)).toBe(450);
+    const silver = emptySave();
+    silver.bestMs = { 25: 20000, 50: 42000, 100: 88000 };
+    expect(masteryFor(silver)).toBe(700);
+    const mid = emptySave();
+    mid.bestMs = { 25: 25000, 50: null, 100: null }; // halfway bronze→silver on 25
+    expect(masteryFor(mid)).toBe(Math.round(575 / 3));
+  });
+
+  it('never returns NaN for degenerate input', () => {
+    const save = emptySave();
+    save.bestMs = { 25: 0, 50: -3, 100: Number.NaN };
+    expect(masteryFor(save)).toBe(0);
+  });
+});
+
+describe('normalizeSave settings passthrough', () => {
+  it('keeps boolean settings and omits non-booleans', () => {
+    const save = normalizeSave({ v: 2, sfx: false, haptics: 'yes', reducedMotion: true });
+    expect(save.sfx).toBe(false);
+    expect(save.haptics).toBeUndefined();
+    expect(save.reducedMotion).toBe(true);
   });
 });

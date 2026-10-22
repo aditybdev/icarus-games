@@ -5,7 +5,21 @@
  * medals, save shape, blitz scoring) live in ./core and are unit-tested
  * with vitest.
  */
-import { createPlatform, dailyKeyUTC, haptics, installErrorHooks } from '@icarus/platform';
+import {
+  createPlatform,
+  dailyKeyUTC,
+  defaultProfile,
+  haptics,
+  icarusScore,
+  installErrorHooks,
+  loadSharedProfile,
+  osPrefersReducedMotion,
+  recordPlay,
+  saveSharedProfile,
+  setHapticsEnabled,
+  siblingForDay,
+  type IcarusProfile,
+} from '@icarus/platform';
 import type { RoundSize } from './core/constants';
 import { BLITZ_SIZE, blitzOver, blitzPointsFor, blitzTimeLeftMs } from './core/blitz';
 import { formatNextMedalMs, medalFor, nextMedalMs } from './core/medals';
@@ -31,6 +45,7 @@ import {
   type RoundState,
 } from './core/round';
 import {
+  masteryFor,
   normalizeSave,
   withBestTime,
   withDailyCompletion,
@@ -54,8 +69,8 @@ installErrorHooks(platform, 'tissue');
 const audio = new AudioSfx();
 const renderer = new Renderer(document.getElementById('stage') as HTMLElement);
 
-// Reduced-motion is cached once at boot (spec: no live toggle in this app).
-const reducedMotion =
+// Reduced-motion starts from the OS preference; the settings toggle overrides.
+let reducedMotion =
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 renderer.setReducedMotion(reducedMotion);
@@ -63,6 +78,10 @@ renderer.setReducedMotion(reducedMotion);
 let save: SaveData = normalizeSave(undefined);
 let appState: AppState = 'menu';
 let paused = false;
+/** User sound toggle (combined with the host audio gate). */
+let sfxOn = true;
+/** Cross-game profile (shared localStorage key on same-origin web). */
+let profile: IcarusProfile = defaultProfile();
 /** True when the user opened the pause overlay (vs. a host/visibility pause). */
 let manualPaused = false;
 let round: RoundState | null = null;
@@ -157,9 +176,11 @@ function finishRound(): void {
   // and a daily completion must be saved immediately.
   void platform.save(save);
   platform.sendScore(scoreForRound(round.size, ms));
+  mirrorMastery();
   const medal = medalFor(round.size, ms);
   audio.chime();
   renderer.confettiBurst();
+  const sib = siblingForDay('tissue');
   ui.showResults({
     timeText: formatMs(ms),
     avgText: `${(avg / 1000).toFixed(2)}s average per tissue`,
@@ -175,6 +196,7 @@ function finishRound(): void {
     nextMedalText: formatNextMedalMs(nextMedalMs(round.size, ms)),
     dailyBestText,
     dailyStreakText,
+    promoText: `More from Icarus: ${sib.name} — ${sib.pitch}`,
   });
 }
 
@@ -189,6 +211,7 @@ function finishBlitz(): void {
   platform.sendScore(blitzScore);
   audio.chime();
   renderer.confettiBurst();
+  const sib = siblingForDay('tissue');
   ui.showResults({
     timeText: String(blitzScore),
     avgText: `${round.pulled} tissues in 30 s`,
@@ -200,6 +223,7 @@ function finishBlitz(): void {
     newBest: false,
     medal: null,
     nextMedalText: '',
+    promoText: `More from Icarus: ${sib.name} — ${sib.pitch}`,
   });
 }
 
@@ -211,7 +235,7 @@ function goToMenu(): void {
   renderer.resetForRound();
   renderer.startPop();
   applySkin();
-  ui.showMenu(save);
+  ui.showMenu(save, icarusScore(profile));
 }
 
 /* ---------------------------- pause / resume ---------------------------- */
@@ -228,7 +252,7 @@ function pauseGame(): void {
 function resumeGame(): void {
   if (!paused) return;
   paused = false;
-  audio.setEnabled(platform.isAudioEnabled());
+  audio.setEnabled(platform.isAudioEnabled() && sfxOn);
   ui.setPaused(false);
   last = performance.now();
 }
@@ -250,7 +274,7 @@ function cancelGrab(): void {
 bindPointer(renderer.domElement, {
   onDown(x, y) {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && !paused);
+    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     if (paused || appState !== 'playing' || !round) return;
     const rect = renderer.exposedTissueRect();
     if (!rect) return;
@@ -424,19 +448,19 @@ function loop(now: number): void {
 const ui = new UI({
   onPlay(size) {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && !paused);
+    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     audio.click();
     startRound(size, { mode: 'time' });
   },
   onBlitz() {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && !paused);
+    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     audio.click();
     startRound(BLITZ_SIZE, { mode: 'blitz' });
   },
   onDaily() {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && !paused);
+    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     audio.click();
     // Daily Sprint: a 25-tissue timed round flagged as the Icarus Daily.
     startRound(25, { mode: 'daily' });
@@ -452,7 +476,7 @@ const ui = new UI({
     if (paused) {
       paused = false;
       manualPaused = false;
-      audio.setEnabled(platform.isAudioEnabled());
+      audio.setEnabled(platform.isAudioEnabled() && sfxOn);
       ui.setPaused(false);
     }
     goToMenu();
@@ -472,7 +496,7 @@ const ui = new UI({
     if (paused) {
       paused = false;
       manualPaused = false;
-      audio.setEnabled(platform.isAudioEnabled());
+      audio.setEnabled(platform.isAudioEnabled() && sfxOn);
       ui.setPaused(false);
       last = performance.now();
     }
@@ -488,9 +512,76 @@ const ui = new UI({
   },
 });
 
+/** Mirror the current mastery into the shared profile (never lowers it). */
+function mirrorMastery(): void {
+  const entry = profile.games.tissue;
+  if (!entry) return;
+  entry.mastery = Math.max(entry.mastery, masteryFor(save));
+  saveSharedProfile(profile);
+}
+
+/** Settings overlay: three toggles mirrored into the save and the profile. */
+function bindSettings(): void {
+  const overlay = document.getElementById('screen-settings')!;
+  const sfxBox = document.getElementById('set-sfx') as HTMLInputElement;
+  const hapticsBox = document.getElementById('set-haptics') as HTMLInputElement;
+  const motionBox = document.getElementById('set-motion') as HTMLInputElement;
+  sfxBox.checked = save.sfx !== false;
+  hapticsBox.checked = save.haptics !== false;
+  motionBox.checked = reducedMotion;
+  document.getElementById('btn-settings')!.addEventListener('click', () => {
+    audio.unlock();
+    audio.click();
+    overlay.hidden = false;
+  });
+  document.getElementById('btn-settings-close')!.addEventListener('click', () => {
+    audio.click();
+    overlay.hidden = true;
+  });
+  sfxBox.addEventListener('change', () => {
+    save = { ...save, sfx: sfxBox.checked };
+    sfxOn = sfxBox.checked;
+    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
+    profile.settings.sfx = sfxOn;
+    saveSharedProfile(profile);
+    void platform.save(save);
+  });
+  hapticsBox.addEventListener('change', () => {
+    save = { ...save, haptics: hapticsBox.checked };
+    setHapticsEnabled(hapticsBox.checked);
+    if (hapticsBox.checked) haptics(20);
+    profile.settings.haptics = hapticsBox.checked;
+    saveSharedProfile(profile);
+    void platform.save(save);
+  });
+  motionBox.addEventListener('change', () => {
+    save = { ...save, reducedMotion: motionBox.checked };
+    reducedMotion = motionBox.checked;
+    renderer.setReducedMotion(reducedMotion);
+    profile.settings.reducedMotion = motionBox.checked;
+    saveSharedProfile(profile);
+    void platform.save(save);
+  });
+}
+
 async function boot(): Promise<void> {
   // Passing today's key drops a stale dailyBestMs when the day rolled over.
   save = normalizeSave(await platform.load(normalizeSave(undefined)), dailyKeyUTC());
+  // Cross-game profile: settings fall back to the shared profile, then to
+  // defaults; this session is recorded with today's mastery.
+  profile = loadSharedProfile();
+  if (save.sfx === undefined) save.sfx = profile.settings.sfx;
+  if (save.haptics === undefined) save.haptics = profile.settings.haptics;
+  if (save.reducedMotion === undefined) {
+    save.reducedMotion = profile.settings.reducedMotion || reducedMotion;
+  }
+  sfxOn = save.sfx !== false;
+  reducedMotion = save.reducedMotion === true;
+  renderer.setReducedMotion(reducedMotion);
+  setHapticsEnabled(save.haptics !== false);
+  recordPlay(profile, 'tissue', masteryFor(save));
+  saveSharedProfile(profile);
+  bindSettings();
   goToMenu();
   window.addEventListener('resize', () => renderer.resize());
   platform.bindLifecycle({
@@ -500,7 +591,7 @@ async function boot(): Promise<void> {
     isManualPause: () => manualPaused,
   });
   platform.onAudioEnabledChange((enabled) => {
-    audio.setEnabled(enabled && !paused);
+    audio.setEnabled(enabled && sfxOn && !paused);
   });
   cancelAnimationFrame(rafId);
   last = performance.now();

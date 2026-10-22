@@ -165,6 +165,11 @@ export class UI {
     btn.classList.add('pulse');
   }
 
+  /** Icarus Score line on the title screen (empty hides it). */
+  setScoreLine(score: number): void {
+    el('score-line').textContent = score > 0 ? `Icarus Score ${score.toLocaleString()}` : '';
+  }
+
   /** Origami gallery: one figure card per level, unlocked on completion. */
   renderGallery(save: SaveData): void {
     const cards = galleryCards(save);
@@ -212,6 +217,8 @@ export class UI {
       dailyStreak?: number;
       /** Best stars on today's daily so far (shown when replaying the daily). */
       dailyBest?: number;
+      /** "More from Icarus" sibling pitch line. */
+      promoText?: string;
     },
   ): void {
     el('screen-results').hidden = !show;
@@ -241,6 +248,8 @@ export class UI {
     el('results-daily-best').hidden = !showDailyBest;
     if (showDailyBest) el('results-daily-best').textContent = `Daily best: ${opts.dailyBest} ★`;
     el('results-stats').textContent = `Folds ${opts.folds} · Par ${opts.par} · Hints ${opts.hints}`;
+    el('results-promo').hidden = !opts.promoText;
+    if (opts.promoText) el('results-promo').textContent = opts.promoText;
     const nextBtn = el<HTMLButtonElement>('btn-next');
     nextBtn.hidden = !opts.hasNext;
     nextBtn.textContent = opts.nextName ? `Next: ${opts.nextName}` : 'Next';

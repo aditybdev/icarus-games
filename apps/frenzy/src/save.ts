@@ -18,6 +18,8 @@ export interface SaveData {
   bestRank: string | null;
   reducedMotion?: boolean;
   sfx?: boolean;
+  /** User haptics toggle; undefined = on. */
+  haptics?: boolean;
   dailyLast: string;
   dailyStreak: number;
   dailyBestMs: number | null;
@@ -50,6 +52,7 @@ export function normalizeSave(raw: unknown, todayKey?: string): SaveData {
   save.bestRank = typeof data.bestRank === 'string' ? data.bestRank : null;
   if (typeof data.reducedMotion === 'boolean') save.reducedMotion = data.reducedMotion;
   if (typeof data.sfx === 'boolean') save.sfx = data.sfx;
+  if (typeof data.haptics === 'boolean') save.haptics = data.haptics;
 
   save.dailyLast = typeof data.dailyLast === 'string' ? data.dailyLast : '';
   save.dailyStreak =

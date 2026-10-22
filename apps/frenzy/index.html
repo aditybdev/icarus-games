@@ -124,8 +124,10 @@
     /* Daily Race entry (Icarus Daily): sunset-gold button + HUD chip. */
     #btn-daily { background: #ffb630; box-shadow: 0 5px 0 #e69a12, 0 8px 14px rgba(0,0,0,.25); color: #5c3a00; }
     #btn-daily:active { box-shadow: 0 1px 0 #e69a12; }
-    #daily-line { font-size: .95rem; font-weight: 800; color: var(--cream);
+    #daily-line, #score-line { font-size: .95rem; font-weight: 800; color: var(--cream);
       text-shadow: 0 1px 3px rgba(0,0,0,.45); }
+    #score-line:empty { display: none; }
+    #promo-line { font-size: .9rem; font-weight: 700; color: rgba(58,42,24,.65); }
     #daily-chip {
       background: #ffb630; color: #5c3a00; letter-spacing: .08em;
     }
@@ -252,6 +254,7 @@
     <button class="btn" id="btn-race">Race 50 m</button>
     <button class="btn" id="btn-daily">Daily Race</button>
     <div id="daily-line"></div>
+    <div id="score-line"></div>
     <button class="btn secondary" id="btn-train">Training</button>
     <div class="howto">Hold a leg to swing it forward, release to stomp. Alternate diagonals — FL+BR then FR+BL — for maximum wobble-speed!</div>
   </div>
@@ -267,6 +270,7 @@
       <div id="results-best" class="hidden">NEW BEST!</div>
       <div id="results-rankup" class="hidden">RANK UP!</div>
       <div id="results-stats"></div>
+      <div id="promo-line"></div>
       <button class="btn" id="btn-retry">Retry</button>
       <div class="hint-line">Press R or Enter to retry</div>
       <button class="btn secondary" id="btn-results-menu">Menu</button>
@@ -288,6 +292,7 @@
       <h2>Settings</h2>
       <label class="setrow">Reduced camera motion <input type="checkbox" id="set-motion" /></label>
       <label class="setrow">Sound effects <input type="checkbox" id="set-sfx" checked /></label>
+      <label class="setrow">Haptics <input type="checkbox" id="set-haptics" checked /></label>
       <button class="btn" id="btn-settings-close">Done</button>
     </div>
   </div>

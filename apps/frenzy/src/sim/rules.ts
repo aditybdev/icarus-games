@@ -75,6 +75,23 @@ export function formatSeconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)} s`;
 }
 
+/**
+ * Icarus mastery 0–1000 from the best effective race time. Rank anchors:
+ * any finish = 200 (C), B = 500, A = 750, S = 1000, linearly interpolated
+ * within each band; no finish yet = 0.
+ */
+export function masteryFor(bestTimeMs: number | null): number {
+  if (bestTimeMs == null || !(bestTimeMs > 0)) return 0;
+  if (bestTimeMs <= 30_000) return 1000;
+  if (bestTimeMs <= 45_000) {
+    return Math.round(750 + ((45_000 - bestTimeMs) / 15_000) * 250);
+  }
+  if (bestTimeMs <= 65_000) {
+    return Math.round(500 + ((65_000 - bestTimeMs) / 20_000) * 250);
+  }
+  return 200;
+}
+
 /** "12.3 m" */
 export function formatMetres(m: number): string {
   return `${m.toFixed(1)} m`;

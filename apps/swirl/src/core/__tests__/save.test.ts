@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  masteryFor,
   withDailyDay,
   withDailyResult,
   DEFAULT_SAVE,
@@ -171,5 +172,30 @@ describe('daily rush', () => {
     const worse = withDailyResult(replay.save, '2026-10-23', 2);
     expect(worse.improved).toBe(false);
     expect(worse.save.dailyBestStars).toBe(8);
+  });
+});
+
+describe('masteryFor', () => {
+  it('is 0 for a fresh save and 1000 at both soft caps', () => {
+    expect(masteryFor({ ...DEFAULT_SAVE })).toBe(0);
+    expect(masteryFor({ ...DEFAULT_SAVE, best: 1060, bestRushStars: 9 })).toBe(1000);
+  });
+
+  it('weights free 70% and rush 30%', () => {
+    expect(masteryFor({ ...DEFAULT_SAVE, best: 530 })).toBe(350);
+    expect(masteryFor({ ...DEFAULT_SAVE, bestRushStars: 3 })).toBe(100);
+  });
+
+  it('caps over-anchor values instead of exceeding 1000', () => {
+    expect(masteryFor({ ...DEFAULT_SAVE, best: 99999, bestRushStars: 99 })).toBe(1000);
+  });
+});
+
+describe('normalizeSave settings passthrough', () => {
+  it('keeps boolean settings and omits non-booleans', () => {
+    const save = normalizeSave({ v: 1, sfx: false, haptics: true, reducedMotion: 'yes' });
+    expect(save.sfx).toBe(false);
+    expect(save.haptics).toBe(true);
+    expect(save.reducedMotion).toBeUndefined();
   });
 });

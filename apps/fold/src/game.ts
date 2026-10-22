@@ -4,7 +4,20 @@
  */
 
 import type { Platform } from '@icarus/platform';
-import { dailyDoneToday, dailyKeyUTC, haptics, recordDailyCompletion } from '@icarus/platform';
+import {
+  dailyDoneToday,
+  dailyKeyUTC,
+  defaultProfile,
+  haptics,
+  icarusScore,
+  loadSharedProfile,
+  recordDailyCompletion,
+  recordPlay,
+  saveSharedProfile,
+  setHapticsEnabled,
+  siblingForDay,
+  type IcarusProfile,
+} from '@icarus/platform';
 import { AudioFx } from './audio';
 import { Confetti } from './confetti';
 import { dailyLevelIndex } from './daily';
@@ -36,6 +49,7 @@ import {
   currentTier,
   defaultSave,
   flawlessStreak,
+  masteryFor,
   matchPercent,
   normalizeSave,
   shouldSuggestUndo,
@@ -95,9 +109,11 @@ export class Game {
   private cssW = 1;
   private cssH = 1;
   private introStart = 0;
-  /** Cached once at boot (there is no in-game motion toggle). */
-  private readonly reducedMotion: boolean;
-  private readonly foldAnimMs: number;
+  /** Reduced-motion gate: OS preference until the user toggles it in settings. */
+  private reducedMotion: boolean;
+  private foldAnimMs: number;
+  /** Cross-game profile (shared localStorage key on same-origin web). */
+  private profile: IcarusProfile = defaultProfile();
 
   constructor(private readonly platform: Platform) {
     const canvas = document.getElementById('scene');
@@ -156,11 +172,81 @@ export class Game {
     const loaded = await this.platform.load<SaveData>(defaultSave(LEVELS.length));
     // Pass today's UTC key so a stale dailyBestStars resets on day change.
     this.save = normalizeSave(loaded, LEVELS.length, dailyKeyUTC());
+    // Cross-game profile: settings fall back to the shared profile, then to
+    // defaults; this session is recorded with today's mastery.
+    this.profile = loadSharedProfile();
+    if (this.save.sfx === undefined) this.save.sfx = this.profile.settings.sfx;
+    if (this.save.haptics === undefined) this.save.haptics = this.profile.settings.haptics;
+    if (this.save.reducedMotion === undefined) {
+      this.save.reducedMotion = this.profile.settings.reducedMotion || this.reducedMotion;
+    }
+    this.audio.setSfx(this.save.sfx !== false);
+    setHapticsEnabled(this.save.haptics !== false);
+    this.applyReducedMotion(this.save.reducedMotion === true);
+    recordPlay(this.profile, 'fold', masteryFor(this.save));
+    saveSharedProfile(this.profile);
+    this.bindSettings();
     this.showTitle();
     this.bindInput();
     this.bindResize();
     this.resize();
     requestAnimationFrame((t) => this.tick(t));
+  }
+
+  /** Recompute the reduced-motion gate + fold animation duration. */
+  private applyReducedMotion(on: boolean): void {
+    this.reducedMotion = on;
+    this.foldAnimMs = on ? FOLD_ANIM_MS_REDUCED : FOLD_ANIM_MS;
+  }
+
+  /** Mirror the current mastery into the shared profile (never lowers it). */
+  private mirrorMastery(): void {
+    const entry = this.profile.games.fold;
+    if (!entry) return;
+    entry.mastery = Math.max(entry.mastery, masteryFor(this.save));
+    saveSharedProfile(this.profile);
+  }
+
+  /** Settings overlay: three toggles mirrored into the save and the profile. */
+  private bindSettings(): void {
+    const overlay = document.getElementById('screen-settings')!;
+    const sfxBox = document.getElementById('set-sfx') as HTMLInputElement;
+    const hapticsBox = document.getElementById('set-haptics') as HTMLInputElement;
+    const motionBox = document.getElementById('set-motion') as HTMLInputElement;
+    sfxBox.checked = this.save.sfx !== false;
+    hapticsBox.checked = this.save.haptics !== false;
+    motionBox.checked = this.save.reducedMotion === true;
+    document.getElementById('btn-settings')!.addEventListener('click', () => {
+      this.audio.unlock();
+      this.audio.click();
+      overlay.hidden = false;
+    });
+    document.getElementById('btn-settings-close')!.addEventListener('click', () => {
+      this.audio.click();
+      overlay.hidden = true;
+    });
+    sfxBox.addEventListener('change', () => {
+      this.save.sfx = sfxBox.checked;
+      this.audio.setSfx(sfxBox.checked);
+      this.profile.settings.sfx = sfxBox.checked;
+      saveSharedProfile(this.profile);
+      void this.platform.save(this.save);
+    });
+    hapticsBox.addEventListener('change', () => {
+      this.save.haptics = hapticsBox.checked;
+      setHapticsEnabled(hapticsBox.checked);
+      if (hapticsBox.checked) haptics(20);
+      this.profile.settings.haptics = hapticsBox.checked;
+      saveSharedProfile(this.profile);
+      void this.platform.save(this.save);
+    });
+    motionBox.addEventListener('change', () => {
+      this.save.reducedMotion = motionBox.checked;
+      this.applyReducedMotion(motionBox.checked);
+      this.profile.settings.reducedMotion = motionBox.checked;
+      saveSharedProfile(this.profile);
+      void this.platform.save(this.save);
+    });
   }
 
   // ------------------------------------------------------------------ screens
@@ -173,6 +259,7 @@ export class Game {
     const target = continueTarget(this.save);
     this.ui.setContinue(target === null ? null : `Continue — Level ${LEVELS[target].id}`);
     this.ui.setDaily(this.save.dailyStreak, dailyDoneToday(this.save, dailyKeyUTC()));
+    this.ui.setScoreLine(icarusScore(this.profile));
     this.ui.showScreen('title');
   }
 
@@ -479,9 +566,10 @@ export class Game {
     }
     void this.platform.save(this.save);
     this.platform.sendScore(totalStars(this.save));
+    this.mirrorMastery();
     this.audio.chime(stars);
     haptics([20, 40, 20]); // gentle double-tap celebration pulse
-    if (stars === 3) this.confetti.burst(performance.now(), this.cssW);
+    if (stars === 3 && !this.reducedMotion) this.confetti.burst(performance.now(), this.cssW);
     const streak = flawlessStreak(this.save.stars, this.levelIndex);
     // In daily mode only offer Next when the following level is actually
     // unlocked (the daily itself may be far ahead of the player's progress).
@@ -490,6 +578,7 @@ export class Game {
       (!this.dailyMode || this.levelIndex + 1 < this.save.unlocked);
     const dailyStreak = this.save.dailyStreak;
     const dailyBestStars = this.save.dailyBestStars;
+    const sib = siblingForDay('fold');
     window.setTimeout(() => {
       // Bail if the completion was undone/reset or another level started
       // during the 450ms delay (all of those clear `completed`).
@@ -506,6 +595,7 @@ export class Game {
         streak,
         dailyStreak: this.dailyMode ? dailyStreak : undefined,
         dailyBest: this.dailyMode && dailyReplay ? dailyBestStars : undefined,
+        promoText: `More from Icarus: ${sib.name} — ${sib.pitch}`,
       });
     }, 450);
   }

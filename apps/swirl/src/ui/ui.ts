@@ -32,10 +32,17 @@ export interface ResultsView {
   newBest: boolean;
   /** Show the "Keep rushing" button (endless mode checkpoint). */
   continueRush?: boolean;
+  /** "More from Icarus" sibling pitch line ("" hides it). */
+  promoText?: string;
 }
 
-const REDUCED_MOTION =
+let reducedMotion =
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+
+/** Override the reduced-motion gate from the user settings toggle. */
+export function setReducedMotion(v: boolean): void {
+  reducedMotion = v;
+}
 
 function must<T extends HTMLElement>(id: string): T {
   const el = document.getElementById(id);
@@ -72,10 +79,12 @@ export class UI {
   private readonly doneBtn = must<HTMLButtonElement>('done-btn');
 
   private readonly titleBest = must('title-best');
+  private readonly scoreLine = must('score-line');
   private readonly resultsTitle = must('results-title');
   private readonly resultsStars = must('results-stars');
   private readonly resultsScore = must('results-score');
   private readonly resultsBest = must('results-best');
+  private readonly resultsPromo = must('results-promo');
   private readonly orderCardTitle = must('order-card-title');
   private readonly orderCardFlavor = must('order-card-flavor');
   private readonly orderCardTarget = must('order-card-target');
@@ -141,6 +150,7 @@ export class UI {
     best: number,
     bestRushStars: number,
     daily?: { streak: number; doneToday: boolean },
+    score = 0,
   ): void {
     this.clearResultsAnims();
     this.show(this.hud, false);
@@ -156,6 +166,7 @@ export class UI {
       must('daily-line').textContent =
         daily.streak > 0 ? `Daily streak: ${daily.streak} day${daily.streak === 1 ? '' : 's'}` : '';
     }
+    this.scoreLine.textContent = score > 0 ? `Icarus Score ${score.toLocaleString()}` : '';
     this.show(this.titleScreen, true);
   }
 
@@ -279,7 +290,7 @@ export class UI {
     this.resultsStars.replaceChildren();
 
     // Score: count up from 0 when motion is allowed, else print final text.
-    if (view.countUp && !REDUCED_MOTION) {
+    if (view.countUp && !reducedMotion) {
       const { to, suffix } = view.countUp;
       const DURATION = 600;
       const t0 = performance.now();
@@ -296,7 +307,7 @@ export class UI {
     }
 
     if (view.stars) {
-      const stagger = view.stars.earned > 0 && !REDUCED_MOTION;
+      const stagger = view.stars.earned > 0 && !reducedMotion;
       const spans: HTMLSpanElement[] = [];
       for (let i = 0; i < view.stars.max; i += 1) {
         const star = document.createElement('span');
@@ -323,6 +334,8 @@ export class UI {
       this.show(this.resultsStars, false);
     }
     this.show(this.continueRushBtn, view.continueRush === true);
+    this.resultsPromo.textContent = view.promoText ?? '';
+    this.show(this.resultsPromo, !!view.promoText);
     this.show(this.resultsScreen, true);
   }
 

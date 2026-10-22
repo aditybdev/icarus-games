@@ -354,6 +354,46 @@
         color: var(--ink-soft);
       }
 
+      .btn-settings {
+        min-width: 0;
+        width: 52px;
+        min-height: 52px;
+        border-radius: 14px;
+        padding: 0;
+        font-size: 24px;
+        line-height: 1;
+      }
+
+      .setrow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        font-size: 16px;
+        font-weight: 800;
+        padding: 6px 2px;
+      }
+
+      .setrow input {
+        width: 26px;
+        height: 26px;
+        accent-color: #5b93d6;
+      }
+
+      #score-line {
+        margin: 2px 0 0;
+        font-size: 15px;
+        font-weight: 800;
+        color: #5b93d6;
+      }
+
+      #results-promo {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--ink-soft, #8a94a6);
+      }
+
       .howto {
         margin: 2px 0 0;
         font-size: 14px;
@@ -707,10 +747,22 @@
         </button>
         <div id="skin-row" aria-label="Box skins"></div>
         <p id="menu-stats" hidden></p>
+        <p id="score-line" hidden></p>
+        <button id="btn-settings" class="btn btn-settings" type="button" aria-label="Settings">⚙</button>
         <p class="howto">
           Grab the tissue and swipe UP. Let go past the stretch point to rip it
           free — too short and it snaps back! Every 20th tissue is golden.
         </p>
+      </div>
+    </div>
+
+    <div id="screen-settings" class="screen" hidden>
+      <div class="card">
+        <h2 class="pause-title">Settings</h2>
+        <label class="setrow">Sound effects <input type="checkbox" id="set-sfx" checked /></label>
+        <label class="setrow">Haptics <input type="checkbox" id="set-haptics" checked /></label>
+        <label class="setrow">Reduced motion <input type="checkbox" id="set-motion" /></label>
+        <button id="btn-settings-close" class="btn btn-big" type="button">Done</button>
       </div>
     </div>
 
@@ -745,6 +797,7 @@
         <div id="results-best"></div>
         <div id="results-daily-best" hidden></div>
         <div id="results-daily-streak" hidden></div>
+        <div id="results-promo" hidden></div>
         <button id="btn-replay" class="btn btn-big" type="button">Replay</button>
         <button id="btn-results-menu" class="btn btn-secondary btn-big" type="button">Menu</button>
       </div>

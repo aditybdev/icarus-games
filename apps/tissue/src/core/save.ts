@@ -22,7 +22,7 @@
  * time for dailyLast's day — reset when the day changes at load.
  */
 import { recordDailyCompletion } from '@icarus/platform';
-import { ROUND_SIZES, type RoundSize } from './constants';
+import { MEDAL_TARGETS_MS, ROUND_SIZES, type RoundSize } from './constants';
 
 export interface SaveStats {
   roundsPlayed: number;
@@ -42,6 +42,10 @@ export interface SaveData {
   dailyStreak: number;
   /** Best daily time for dailyLast's day (ms); null = no finish that day. */
   dailyBestMs: number | null;
+  /** User settings toggles; undefined = on / OS default. */
+  sfx?: boolean;
+  haptics?: boolean;
+  reducedMotion?: boolean;
 }
 
 export function emptySave(): SaveData {
@@ -83,6 +87,9 @@ export function normalizeSave(raw: unknown, todayKey?: string): SaveData {
     dailyLast?: unknown;
     dailyStreak?: unknown;
     dailyBestMs?: unknown;
+    sfx?: unknown;
+    haptics?: unknown;
+    reducedMotion?: unknown;
   };
   const best = data.bestMs;
   if (best && typeof best === 'object') {
@@ -107,6 +114,9 @@ export function normalizeSave(raw: unknown, todayKey?: string): SaveData {
   save.dailyStreak = coerceCount(data.dailyStreak);
   save.dailyBestMs = coerceBestMs(data.dailyBestMs);
   if (todayKey !== undefined && save.dailyLast !== todayKey) save.dailyBestMs = null;
+  if (typeof data.sfx === 'boolean') save.sfx = data.sfx;
+  if (typeof data.haptics === 'boolean') save.haptics = data.haptics;
+  if (typeof data.reducedMotion === 'boolean') save.reducedMotion = data.reducedMotion;
   return save;
 }
 
@@ -145,6 +155,34 @@ export function withRoundStats(save: SaveData, pulled: number, peakStreak: numbe
 export function withSkin(save: SaveData, skin: number): SaveData {
   if (skin === save.skin) return save;
   return { ...save, skin: Math.max(0, Math.floor(skin)) };
+}
+
+/**
+ * Icarus mastery 0–1000: per-size pace vs the medal anchors, averaged across
+ * the three sizes. Anchors per size: any finish = 200, bronze = 450,
+ * silver = 700, gold = 1000, linearly interpolated within each band.
+ */
+export function masteryFor(save: SaveData): number {
+  let sum = 0;
+  for (const size of ROUND_SIZES) {
+    sum += sizeMastery(save.bestMs[size], MEDAL_TARGETS_MS[size]);
+  }
+  return Math.round(sum / ROUND_SIZES.length);
+}
+
+function sizeMastery(
+  bestMs: number | null,
+  targets: { bronze: number; silver: number; gold: number },
+): number {
+  if (bestMs === null || !(bestMs > 0)) return 0;
+  if (bestMs <= targets.gold) return 1000;
+  if (bestMs <= targets.silver) {
+    return Math.round(700 + ((targets.silver - bestMs) / (targets.silver - targets.gold)) * 300);
+  }
+  if (bestMs <= targets.bronze) {
+    return Math.round(450 + ((targets.bronze - bestMs) / (targets.bronze - targets.silver)) * 250);
+  }
+  return 200;
 }
 
 /**

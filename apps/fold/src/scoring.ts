@@ -44,6 +44,10 @@ export interface SaveData {
   dailyStreak: number;
   /** Best star rating earned on TODAY's daily level (0–3; resets on day change). */
   dailyBestStars: number;
+  /** User settings toggles; undefined = on / OS default. */
+  sfx?: boolean;
+  haptics?: boolean;
+  reducedMotion?: boolean;
 }
 
 export const SAVE_VERSION = 1;
@@ -86,11 +90,25 @@ export function normalizeSave(raw: unknown, levelCount: number, todayKey?: strin
     typeof rawBest === 'number' && rawBest >= 0 && rawBest <= 3 ? Math.floor(rawBest) : 0;
   // A new day (or no daily ever completed) means today's best starts at 0.
   if (todayKey !== undefined && dailyLast !== todayKey) dailyBestStars = 0;
-  return { v: SAVE_VERSION, stars, unlocked, dailyLast, dailyStreak, dailyBestStars };
+  const save: SaveData = { v: SAVE_VERSION, stars, unlocked, dailyLast, dailyStreak, dailyBestStars };
+  if (typeof obj.sfx === 'boolean') save.sfx = obj.sfx;
+  if (typeof obj.haptics === 'boolean') save.haptics = obj.haptics;
+  if (typeof obj.reducedMotion === 'boolean') save.reducedMotion = obj.reducedMotion;
+  return save;
 }
 
 export function totalStars(save: SaveData): number {
   return save.stars.reduce((a, b) => a + b, 0);
+}
+
+/**
+ * Icarus mastery 0–1000: total stars vs the full 3★-every-level clear —
+ * linear, matching the in-game chase.
+ */
+export function masteryFor(save: SaveData): number {
+  const max = save.stars.length * 3;
+  if (max <= 0) return 0;
+  return Math.round((totalStars(save) / max) * 1000);
 }
 
 /**

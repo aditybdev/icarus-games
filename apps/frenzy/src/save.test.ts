@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { masteryFor } from './sim/rules';
 import {
   DEFAULT_SAVE,
   normalizeSave,
@@ -92,5 +93,28 @@ describe('withDailyCompletion', () => {
     const r = withDailyCompletion(frozen, '2026-10-23', 28_000);
     expect(frozen.dailyBestMs).toBe(30_000);
     expect(r.save).not.toBe(frozen);
+  });
+});
+
+describe('masteryFor', () => {
+  it('is 0 with no finish and 1000 at S pace', () => {
+    expect(masteryFor(null)).toBe(0);
+    expect(masteryFor(30_000)).toBe(1000);
+    expect(masteryFor(25_000)).toBe(1000);
+  });
+
+  it('hits the rank anchors and interpolates within bands', () => {
+    expect(masteryFor(65_001)).toBe(200);
+    expect(masteryFor(90_000)).toBe(200);
+    expect(masteryFor(65_000)).toBe(500);
+    expect(masteryFor(45_000)).toBe(750);
+    expect(masteryFor(55_000)).toBe(625);
+    expect(masteryFor(37_500)).toBe(875);
+  });
+
+  it('never returns out-of-range or NaN for degenerate input', () => {
+    expect(masteryFor(0)).toBe(0);
+    expect(masteryFor(-5)).toBe(0);
+    expect(masteryFor(Number.NaN)).toBe(0);
   });
 });

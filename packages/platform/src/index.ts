@@ -317,3 +317,239 @@ export function recordDailyCompletion(
 export function dailyDoneToday(progress: DailyProgress, todayKey: string): boolean {
   return progress.dailyLast === todayKey;
 }
+
+/* --------------------------------------------------------------------------
+ * defineSave — versioned save definitions with total normalization.
+ *
+ * Policy (portfolio-wide):
+ * - Every payload carries `v`. normalize() NEVER throws: garbage → defaults.
+ * - `sanitize` coerces a current-version payload field by field (game-owned).
+ * - `migrate(raw, fromVersion)` is a pure step that must return the payload
+ *   upgraded to the current version; it runs when v < version.
+ * - Forward tolerance: when v is NEWER than this build (a cached old bundle
+ *   reading a newer save), known fields are sanitized and unknown top-level
+ *   fields — including the newer `v` stamp — are preserved verbatim so the
+ *   next save doesn't silently strip the future build's data.
+ * ------------------------------------------------------------------------ */
+
+export interface SaveDefinition<S> {
+  version: number;
+  defaults: S;
+  sanitize: (raw: Record<string, unknown>) => S;
+  migrate?: (raw: Record<string, unknown>, fromVersion: number) => Record<string, unknown>;
+}
+
+export interface SaveHandle<S> {
+  normalize(raw: unknown): S;
+}
+
+function deepCopy<S>(value: S): S {
+  return JSON.parse(JSON.stringify(value)) as S;
+}
+
+export function defineSave<S>(def: SaveDefinition<S>): SaveHandle<S> {
+  return {
+    normalize(raw: unknown): S {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return deepCopy(def.defaults);
+      let payload = raw as Record<string, unknown>;
+      const v = typeof payload.v === 'number' && Number.isFinite(payload.v) ? payload.v : 0;
+      if (v < def.version && def.migrate) {
+        try {
+          payload = def.migrate(payload, v);
+        } catch {
+          return deepCopy(def.defaults);
+        }
+      }
+      const clean = def.sanitize(payload);
+      if (v > def.version) {
+        // Newer save than this build: preserve unknown fields + the version stamp.
+        const out = clean as Record<string, unknown>;
+        const known = new Set(Object.keys(def.defaults as object));
+        for (const key of Object.keys(payload)) {
+          if (key !== 'v' && !known.has(key)) out[key] = payload[key];
+        }
+        out.v = v;
+      }
+      return clean;
+    },
+  };
+}
+
+/* --------------------------------------------------------------------------
+ * Icarus profile — cross-game identity (settings + per-game mastery).
+ *
+ * Storage reality: Playables saveData is per-game and host-scoped — no
+ * cross-game channel exists there. The shared profile lives under the
+ * localStorage key `icarus:profile`, which only aggregates when several
+ * Icarus games are served from ONE origin (web/arcade shell). Every game
+ * also merges the fragment it can see, so per-game views stay correct
+ * everywhere and same-origin web gets the full portfolio view.
+ * ------------------------------------------------------------------------ */
+
+export interface ProfileSettings {
+  sfx: boolean;
+  haptics: boolean;
+  reducedMotion: boolean;
+}
+
+export interface GameProfileEntry {
+  plays: number;
+  /** ISO date of the last session ('YYYY-MM-DD'). */
+  lastPlayed: string;
+  /** Mastery 0–1000 computed from that game's persisted bests. */
+  mastery: number;
+}
+
+export interface IcarusProfile {
+  v: 1;
+  settings: ProfileSettings;
+  games: Record<string, GameProfileEntry>;
+}
+
+export const PROFILE_STORAGE_KEY = 'icarus:profile';
+
+export function defaultProfile(): IcarusProfile {
+  return {
+    v: 1,
+    settings: { sfx: true, haptics: true, reducedMotion: osPrefersReducedMotion() },
+    games: {},
+  };
+}
+
+/** Total coercion of an unknown persisted profile. */
+export function normalizeProfile(raw: unknown): IcarusProfile {
+  const profile = defaultProfile();
+  if (!raw || typeof raw !== 'object') return profile;
+  const data = raw as Partial<IcarusProfile>;
+  if (data.settings && typeof data.settings === 'object') {
+    const s = data.settings as Partial<ProfileSettings>;
+    if (typeof s.sfx === 'boolean') profile.settings.sfx = s.sfx;
+    if (typeof s.haptics === 'boolean') profile.settings.haptics = s.haptics;
+    if (typeof s.reducedMotion === 'boolean') profile.settings.reducedMotion = s.reducedMotion;
+  }
+  if (data.games && typeof data.games === 'object') {
+    for (const [id, entry] of Object.entries(data.games)) {
+      if (!entry || typeof entry !== 'object') continue;
+      const e = entry as Partial<GameProfileEntry>;
+      profile.games[id] = {
+        plays:
+          typeof e.plays === 'number' && Number.isFinite(e.plays) && e.plays > 0
+            ? Math.floor(e.plays)
+            : 0,
+        lastPlayed: typeof e.lastPlayed === 'string' ? e.lastPlayed : '',
+        mastery:
+          typeof e.mastery === 'number' && Number.isFinite(e.mastery)
+            ? Math.max(0, Math.min(1000, Math.round(e.mastery)))
+            : 0,
+      };
+    }
+  }
+  return profile;
+}
+
+/** Read the shared profile key (web storage only; returns defaults elsewhere). */
+export function loadSharedProfile(): IcarusProfile {
+  try {
+    const raw = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    return normalizeProfile(raw ? JSON.parse(raw) : undefined);
+  } catch {
+    return defaultProfile();
+  }
+}
+
+/** Persist the shared profile key (no-op when storage is unavailable). */
+export function saveSharedProfile(profile: IcarusProfile): void {
+  try {
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/**
+ * Merge two profile views (e.g. a game's embedded fragment with the shared
+ * key). Settings prefer `local` (this device's explicit toggles win); game
+ * entries union with max plays (a mirrored entry must not double-count),
+ * latest lastPlayed and max mastery.
+ */
+export function mergeProfiles(local: IcarusProfile, shared: IcarusProfile): IcarusProfile {
+  const merged: IcarusProfile = { v: 1, settings: { ...local.settings }, games: {} };
+  for (const id of new Set([...Object.keys(local.games), ...Object.keys(shared.games)])) {
+    const a = local.games[id];
+    const b = shared.games[id];
+    if (a && b) {
+      merged.games[id] = {
+        plays: Math.max(a.plays, b.plays),
+        lastPlayed: a.lastPlayed > b.lastPlayed ? a.lastPlayed : b.lastPlayed,
+        mastery: Math.max(a.mastery, b.mastery),
+      };
+    } else {
+      merged.games[id] = { ...(a ?? b)! };
+    }
+  }
+  return merged;
+}
+
+/** Record a session for gameId with its current mastery (never lowers it). */
+export function recordPlay(
+  profile: IcarusProfile,
+  gameId: string,
+  mastery: number,
+  todayKey: string = dailyKeyUTC(),
+): IcarusProfile {
+  const entry = profile.games[gameId] ?? { plays: 0, lastPlayed: '', mastery: 0 };
+  profile.games[gameId] = {
+    plays: entry.plays + 1,
+    lastPlayed: todayKey,
+    mastery: Math.max(entry.mastery, Math.max(0, Math.min(1000, Math.round(mastery)))),
+  };
+  return profile;
+}
+
+/** Portfolio progress: sum of per-game mastery (0–4000 with four games). */
+export function icarusScore(profile: IcarusProfile): number {
+  return Object.values(profile.games).reduce((sum, g) => sum + g.mastery, 0);
+}
+
+/* --------------------------------------------------------------------------
+ * Cross-promo — "More from Icarus" day-rotated sibling pitch.
+ *
+ * Links are policy-gated (Playables disallows outbound navigation), so the
+ * card is brand-building copy only; a shell that may link (store listings)
+ * can map `id` to a URL itself.
+ * ------------------------------------------------------------------------ */
+
+export interface SiblingPitch {
+  id: string;
+  name: string;
+  pitch: string;
+}
+
+const SIBLING_TABLE: Record<string, SiblingPitch[]> = {
+  swirl: [
+    { id: 'fold', name: 'Fold', pitch: 'a calm origami puzzle — 30 paper folds' },
+    { id: 'frenzy', name: 'Four-Leg Frenzy', pitch: 'waddle a derpy pup across 50 m' },
+    { id: 'tissue', name: 'Tissue Rush', pitch: '25 pulls of pure speed' },
+  ],
+  fold: [
+    { id: 'tissue', name: 'Tissue Rush', pitch: 'empty the box as fast as you can' },
+    { id: 'swirl', name: 'Swirl!', pitch: 'stack the tallest soft-serve tower' },
+    { id: 'frenzy', name: 'Four-Leg Frenzy', pitch: 'four legs, zero coordination' },
+  ],
+  frenzy: [
+    { id: 'swirl', name: 'Swirl!', pitch: 'a steady-hand ice-cream stacker' },
+    { id: 'tissue', name: 'Tissue Rush', pitch: 'a 60-second speed fix' },
+    { id: 'fold', name: 'Fold', pitch: 'slow down with a paper puzzle' },
+  ],
+  tissue: [
+    { id: 'frenzy', name: 'Four-Leg Frenzy', pitch: 'the funniest 50 m you will run' },
+    { id: 'fold', name: 'Fold', pitch: '30 origami levels to master' },
+    { id: 'swirl', name: 'Swirl!', pitch: 'how tall can you swirl?' },
+  ],
+};
+
+/** The sibling pitch for a game today — rotates daily, same for everyone. */
+export function siblingForDay(gameId: string, seed: number = dateSeedUTC()): SiblingPitch {
+  const list = SIBLING_TABLE[gameId] ?? [];
+  return list[seed % Math.max(1, list.length)];
+}

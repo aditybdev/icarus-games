@@ -99,6 +99,48 @@
         box-shadow: 0 2px 0 #e69a12, var(--shadow);
       }
 
+      .btn-settings {
+        min-width: 0;
+        width: 52px;
+        min-height: 52px;
+        border-radius: 14px;
+        padding: 0;
+        font-size: 24px;
+        line-height: 1;
+        background: var(--cream);
+        box-shadow: 0 4px 0 #d9b98c, var(--shadow);
+        color: #7a5a2e;
+      }
+
+      .btn-settings:active {
+        box-shadow: 0 1px 0 #d9b98c, var(--shadow);
+      }
+
+      .setrow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        width: 100%;
+        font-size: 17px;
+        font-weight: 800;
+        padding: 6px 2px;
+        color: var(--ink, #4a3418);
+      }
+
+      .setrow input {
+        width: 26px;
+        height: 26px;
+        accent-color: var(--pink);
+      }
+
+      .promo-line {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+        color: #a8845c;
+      }
+
       .daily-line {
         margin: 4px 0 0;
         font-size: 14px;
@@ -652,7 +694,19 @@
         <button id="btn-rush" class="btn btn-secondary btn-big" type="button">Order Rush</button>
         <button id="btn-daily" class="btn btn-daily btn-big" type="button">Daily Rush</button>
         <p id="daily-line" class="daily-line"></p>
+        <p id="score-line" class="daily-line"></p>
+        <button id="btn-settings" class="btn btn-settings" type="button" aria-label="Settings">⚙</button>
         <p class="howto">Hold to dispense · drag to steer · stay centered or it topples!</p>
+      </div>
+    </div>
+
+    <div id="screen-settings" class="screen" hidden>
+      <div class="card">
+        <h2 style="margin:0;font-size:30px;font-weight:900;">Settings</h2>
+        <label class="setrow">Sound effects <input type="checkbox" id="set-sfx" checked /></label>
+        <label class="setrow">Haptics <input type="checkbox" id="set-haptics" checked /></label>
+        <label class="setrow">Reduced motion <input type="checkbox" id="set-motion" /></label>
+        <button id="btn-settings-close" class="btn btn-big" type="button">Done</button>
       </div>
     </div>
 
@@ -670,6 +724,7 @@
         <div id="results-stars"></div>
         <div id="results-score"></div>
         <div id="results-best"></div>
+        <p id="results-promo" class="promo-line" hidden></p>
         <button id="btn-continue-rush" class="btn btn-secondary btn-big" type="button" hidden>
           Keep rushing →
         </button>
