@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  dailyDoneToday,
+  dailyKeyUTC,
   dateSeedUTC,
   haptics,
   mulberry32,
   osPrefersReducedMotion,
+  prevDailyKey,
+  recordDailyCompletion,
   setHapticsEnabled,
 } from './index';
 
@@ -64,5 +68,50 @@ describe('haptics', () => {
 describe('osPrefersReducedMotion', () => {
   it('returns a boolean without throwing outside a browser', () => {
     expect(typeof osPrefersReducedMotion()).toBe('boolean');
+  });
+});
+
+describe('dailyKeyUTC / prevDailyKey', () => {
+  it('formats a UTC date as YYYY-MM-DD', () => {
+    expect(dailyKeyUTC(new Date(Date.UTC(2026, 9, 23)))).toBe('2026-10-23');
+    expect(dailyKeyUTC(new Date(Date.UTC(2026, 0, 5)))).toBe('2026-01-05');
+  });
+
+  it('walks back across month and year boundaries', () => {
+    expect(prevDailyKey('2026-10-01')).toBe('2026-09-30');
+    expect(prevDailyKey('2026-01-01')).toBe('2025-12-31');
+    expect(prevDailyKey('2024-03-01')).toBe('2024-02-29'); // leap year
+  });
+});
+
+describe('recordDailyCompletion', () => {
+  it('starts the streak at 1 on the first completion', () => {
+    expect(recordDailyCompletion({ dailyLast: '', dailyStreak: 0 }, '2026-10-23')).toEqual({
+      dailyLast: '2026-10-23',
+      dailyStreak: 1,
+    });
+  });
+
+  it('extends the streak on consecutive days', () => {
+    const p = recordDailyCompletion({ dailyLast: '2026-10-22', dailyStreak: 4 }, '2026-10-23');
+    expect(p).toEqual({ dailyLast: '2026-10-23', dailyStreak: 5 });
+  });
+
+  it('restarts the streak after a gap', () => {
+    const p = recordDailyCompletion({ dailyLast: '2026-10-20', dailyStreak: 9 }, '2026-10-23');
+    expect(p).toEqual({ dailyLast: '2026-10-23', dailyStreak: 1 });
+  });
+
+  it('is idempotent for same-day replays', () => {
+    const p = recordDailyCompletion({ dailyLast: '2026-10-23', dailyStreak: 3 }, '2026-10-23');
+    expect(p).toEqual({ dailyLast: '2026-10-23', dailyStreak: 3 });
+  });
+});
+
+describe('dailyDoneToday', () => {
+  it('detects same-day completion', () => {
+    expect(dailyDoneToday({ dailyLast: '2026-10-23', dailyStreak: 2 }, '2026-10-23')).toBe(true);
+    expect(dailyDoneToday({ dailyLast: '2026-10-22', dailyStreak: 2 }, '2026-10-23')).toBe(false);
+    expect(dailyDoneToday({ dailyLast: '', dailyStreak: 0 }, '2026-10-23')).toBe(false);
   });
 });

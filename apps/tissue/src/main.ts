@@ -5,7 +5,7 @@
  * medals, save shape, blitz scoring) live in ./core and are unit-tested
  * with vitest.
  */
-import { createPlatform, haptics, installErrorHooks } from '@icarus/platform';
+import { createPlatform, dailyKeyUTC, haptics, installErrorHooks } from '@icarus/platform';
 import type { RoundSize } from './core/constants';
 import { BLITZ_SIZE, blitzOver, blitzPointsFor, blitzTimeLeftMs } from './core/blitz';
 import { formatNextMedalMs, medalFor, nextMedalMs } from './core/medals';
@@ -33,6 +33,7 @@ import {
 import {
   normalizeSave,
   withBestTime,
+  withDailyCompletion,
   withRoundStats,
   withSkin,
   type SaveData,
@@ -44,7 +45,7 @@ import { Renderer } from './game/renderer';
 import { UI } from './ui/ui';
 
 type AppState = 'menu' | 'countdown' | 'playing' | 'results';
-type GameMode = 'time' | 'blitz';
+type GameMode = 'time' | 'blitz' | 'daily';
 
 const platform = createPlatform('tissue');
 // Error hooks must precede any fallible construction (renderer below) so a
@@ -119,13 +120,19 @@ function startRound(
   // is kept for the first entry from the menu.
   countdownT = opts.skipCountdown ? 0.39 : 2.9;
   countdownLabel = '';
-  ui.showCountdown(mode === 'blitz' ? 'Blitz — 30 s score attack!' : `Round of ${size}`);
+  ui.showCountdown(
+    mode === 'blitz'
+      ? 'Blitz — 30 s score attack!'
+      : mode === 'daily'
+        ? 'Daily Sprint — 25 tissues'
+        : `Round of ${size}`,
+  );
   if (opts.skipCountdown) ui.setCountdown('GO!');
   ui.showHUD(mode === 'blitz' ? 0 : size, mode);
 }
 
 function finishRound(): void {
-  if (!round || appState !== 'playing' || mode !== 'time') return;
+  if (!round || appState !== 'playing' || (mode !== 'time' && mode !== 'daily')) return;
   appState = 'results';
   setFever(false);
   const ms = elapsedMs(round, clock);
@@ -134,7 +141,20 @@ function finishRound(): void {
   save = withRoundStats(save, round.pulled, round.peakStreak);
   const result = withBestTime(save, round.size, ms);
   save = result.save;
-  // Persist every finish: stats accumulate even when the best doesn't move.
+  // Daily Sprint: stamp today, bump the streak and keep today's best time.
+  let dailyBestText = '';
+  let dailyStreakText = '';
+  if (mode === 'daily') {
+    const daily = withDailyCompletion(save, dailyKeyUTC(), ms);
+    save = daily.save;
+    dailyBestText = daily.improved
+      ? `New daily best: ${formatMs(ms)}!`
+      : `Daily best today: ${formatMs(save.dailyBestMs ?? ms)}`;
+    dailyStreakText =
+      daily.streak === 1 ? '🔥 1-day streak' : `🔥 ${daily.streak}-day streak`;
+  }
+  // Persist every finish: stats accumulate even when the best doesn't move,
+  // and a daily completion must be saved immediately.
   void platform.save(save);
   platform.sendScore(scoreForRound(round.size, ms));
   const medal = medalFor(round.size, ms);
@@ -146,12 +166,15 @@ function finishRound(): void {
     deltaText: prevBest === null ? '' : formatResultsDeltaMs(ms - prevBest),
     deltaAhead: prevBest !== null && ms < prevBest,
     size: round.size,
+    sizeText: mode === 'daily' ? 'Daily Sprint — 25 tissues' : undefined,
     bestText: result.improved
       ? `New best: ${formatMs(save.bestMs[round.size] ?? ms)}!`
       : `Best: ${formatMs(save.bestMs[round.size] ?? ms)}`,
     newBest: result.improved,
     medal,
     nextMedalText: formatNextMedalMs(nextMedalMs(round.size, ms)),
+    dailyBestText,
+    dailyStreakText,
   });
 }
 
@@ -411,6 +434,13 @@ const ui = new UI({
     audio.click();
     startRound(BLITZ_SIZE, { mode: 'blitz' });
   },
+  onDaily() {
+    audio.unlock();
+    audio.setEnabled(platform.isAudioEnabled() && !paused);
+    audio.click();
+    // Daily Sprint: a 25-tissue timed round flagged as the Icarus Daily.
+    startRound(25, { mode: 'daily' });
+  },
   onReplay() {
     audio.click();
     // Instant replay: skip the 3-2-1, keep just the "GO!" flash.
@@ -459,7 +489,8 @@ const ui = new UI({
 });
 
 async function boot(): Promise<void> {
-  save = normalizeSave(await platform.load(normalizeSave(undefined)));
+  // Passing today's key drops a stale dailyBestMs when the day rolled over.
+  save = normalizeSave(await platform.load(normalizeSave(undefined)), dailyKeyUTC());
   goToMenu();
   window.addEventListener('resize', () => renderer.resize());
   platform.bindLifecycle({

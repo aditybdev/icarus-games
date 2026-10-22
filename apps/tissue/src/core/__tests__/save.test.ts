@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { ROUND_SIZES } from '../constants';
-import { emptySave, normalizeSave, withBestTime, withRoundStats, withSkin } from '../save';
+import {
+  emptySave,
+  normalizeSave,
+  withBestTime,
+  withDailyCompletion,
+  withRoundStats,
+  withSkin,
+} from '../save';
 
 describe('save shape (v2)', () => {
   it('normalizes missing/garbage data to the canonical v2 shape', () => {
@@ -9,6 +16,9 @@ describe('save shape (v2)', () => {
       bestMs: { 25: null, 50: null, 100: null },
       stats: { roundsPlayed: 0, totalPulled: 0, bestStreak: 0 },
       skin: 0,
+      dailyLast: '',
+      dailyStreak: 0,
+      dailyBestMs: null,
     });
     expect(normalizeSave(null)).toEqual(emptySave());
     expect(normalizeSave('junk')).toEqual(emptySave());
@@ -135,5 +145,106 @@ describe('skin selection', () => {
     expect(next.bestMs[25]).toBe(9000);
     expect(save.skin).toBe(0);
     expect(withSkin(next, 2)).toBe(next); // no-op keeps identity
+  });
+});
+
+describe('daily fields (Icarus Daily)', () => {
+  it('defaults cleanly for old saves that predate the daily fields', () => {
+    const save = normalizeSave({ v: 2, bestMs: { 25: 9000 }, skin: 1 });
+    expect(save.dailyLast).toBe('');
+    expect(save.dailyStreak).toBe(0);
+    expect(save.dailyBestMs).toBeNull();
+    // The rest of the payload is untouched.
+    expect(save.bestMs[25]).toBe(9000);
+    expect(save.skin).toBe(1);
+  });
+
+  it('keeps valid daily fields and coerces garbage ones', () => {
+    const save = normalizeSave({
+      v: 2,
+      dailyLast: '2026-10-22',
+      dailyStreak: 7,
+      dailyBestMs: 15234,
+    });
+    expect(save.dailyLast).toBe('2026-10-22');
+    expect(save.dailyStreak).toBe(7);
+    expect(save.dailyBestMs).toBe(15234);
+    // JSON round-trip keeps the fields readable.
+    expect(normalizeSave(JSON.parse(JSON.stringify(save)))).toEqual(save);
+
+    const junk = normalizeSave({
+      v: 2,
+      dailyLast: 42,
+      dailyStreak: -3,
+      dailyBestMs: 'fast',
+    });
+    expect(junk.dailyLast).toBe('');
+    expect(junk.dailyStreak).toBe(0);
+    expect(junk.dailyBestMs).toBeNull();
+  });
+
+  it('resets dailyBestMs at load when the stored day is not today', () => {
+    const raw = {
+      v: 2,
+      dailyLast: '2026-10-22',
+      dailyStreak: 3,
+      dailyBestMs: 15234,
+    };
+    const rolled = normalizeSave(raw, '2026-10-23');
+    expect(rolled.dailyBestMs).toBeNull();
+    // Last day and streak survive the rollover (streak math is shared kit).
+    expect(rolled.dailyLast).toBe('2026-10-22');
+    expect(rolled.dailyStreak).toBe(3);
+
+    const sameDay = normalizeSave(raw, '2026-10-22');
+    expect(sameDay.dailyBestMs).toBe(15234);
+  });
+});
+
+describe('daily completion', () => {
+  it('stamps today, starts the streak at 1 and records the first time', () => {
+    const save = emptySave();
+    const { save: next, improved, streak } = withDailyCompletion(save, '2026-10-23', 20123);
+    expect(improved).toBe(true);
+    expect(streak).toBe(1);
+    expect(next.dailyLast).toBe('2026-10-23');
+    expect(next.dailyStreak).toBe(1);
+    expect(next.dailyBestMs).toBe(20123);
+    // Input untouched.
+    expect(save.dailyLast).toBe('');
+    expect(save.dailyBestMs).toBeNull();
+  });
+
+  it('same-day replays keep the streak and only improve on a faster run', () => {
+    let save = withDailyCompletion(emptySave(), '2026-10-23', 20123).save;
+
+    const slower = withDailyCompletion(save, '2026-10-23', 25000);
+    expect(slower.improved).toBe(false);
+    expect(slower.streak).toBe(1); // same day: streak untouched
+    expect(slower.save.dailyBestMs).toBe(20123);
+
+    save = slower.save;
+    const faster = withDailyCompletion(save, '2026-10-23', 18000);
+    expect(faster.improved).toBe(true);
+    expect(faster.streak).toBe(1);
+    expect(faster.save.dailyBestMs).toBe(18000);
+  });
+
+  it('a next-day completion extends the streak and starts a fresh best', () => {
+    const day1 = withDailyCompletion(emptySave(), '2026-10-22', 20123).save;
+    const day2 = withDailyCompletion(day1, '2026-10-23', 26000);
+    expect(day2.improved).toBe(true); // yesterday's best is stale
+    expect(day2.streak).toBe(2);
+    expect(day2.save.dailyLast).toBe('2026-10-23');
+    expect(day2.save.dailyBestMs).toBe(26000);
+    expect(day1.dailyStreak).toBe(1); // input untouched
+  });
+
+  it('a missed day restarts the streak at 1', () => {
+    const old = withDailyCompletion(emptySave(), '2026-10-20', 20123).save;
+    const afterGap = withDailyCompletion(old, '2026-10-23', 22000);
+    expect(afterGap.streak).toBe(1);
+    expect(afterGap.improved).toBe(true);
+    expect(afterGap.save.dailyBestMs).toBe(22000);
   });
 });

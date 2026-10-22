@@ -5,7 +5,14 @@
  * (scoring, wobble, orders, save) live in ./core and are unit-tested.
  */
 import * as THREE from 'three';
-import { createPlatform, haptics, installErrorHooks } from '@icarus/platform';
+import {
+  createPlatform,
+  dailyDoneToday,
+  dailyKeyUTC,
+  dateSeedUTC,
+  haptics,
+  installErrorHooks,
+} from '@icarus/platform';
 import {
   BETWEEN_ORDERS_HOLD,
   BETWEEN_ORDERS_MIN,
@@ -49,9 +56,12 @@ import {
   updateTurbo,
 } from './core/scoring';
 import {
+  MAX_ORDER_STARS,
   normalizeSave,
   withBestRushStars,
   withBestScore,
+  withDailyDay,
+  withDailyResult,
   type SaveData,
 } from './core/save';
 import { neatness, shouldTopple, updateWobble, wobbleRatio } from './core/wobble';
@@ -90,6 +100,8 @@ let orderIdx = 0;
 let totalStars = 0;
 let selectedFlavor: Flavor = 'vanilla';
 let endless = false;
+/** True while the active rush run is today's date-seeded Daily Rush. */
+let daily = false;
 let rushRng: () => number = mulberry32(1);
 let lastServeStars = 0;
 let lastServeToppled = false;
@@ -217,6 +229,7 @@ function syncHud(): void {
 
 function startFree(): void {
   mode = 'free';
+  daily = false;
   resetRound();
   slowMo = 0;
   world.setSpectacle(null);
@@ -232,9 +245,24 @@ function startFree(): void {
 
 function startRush(): void {
   mode = 'rush';
+  daily = false;
   slowMo = 0;
   world.setSpectacle(null);
   rushRng = mulberry32((Date.now() % 2147483647) >>> 0);
+  orders = createOrders(rushRng);
+  endless = false;
+  orderIdx = 0;
+  totalStars = 0;
+  showCurrentOrderCard();
+}
+
+/** Daily Rush: the same three orders for everyone today (UTC date seed). */
+function startDailyRush(): void {
+  mode = 'rush';
+  daily = true;
+  slowMo = 0;
+  world.setSpectacle(null);
+  rushRng = mulberry32(dateSeedUTC());
   orders = createOrders(rushRng);
   endless = false;
   orderIdx = 0;
@@ -330,20 +358,35 @@ function advanceAfterOrder(): void {
   }
   const result = withBestRushStars(save, totalStars);
   save = result.save;
-  if (result.improved) void platform.save(save);
+  let bestText = result.improved
+    ? `New best: ${save.bestRushStars} stars!`
+    : `Best: ${save.bestRushStars} stars`;
+  let celebrated = result.improved;
+  if (daily) {
+    const today = dailyKeyUTC();
+    const dailyResult = withDailyResult(save, today, Math.min(totalStars, MAX_ORDER_STARS));
+    save = dailyResult.save;
+    celebrated = true;
+    bestText =
+      `Daily streak: ${save.dailyStreak} day${save.dailyStreak === 1 ? '' : 's'} · ` +
+      `Today: ${save.dailyBestStars} stars`;
+    void platform.save(save);
+  } else if (result.improved) {
+    void platform.save(save);
+  }
   platform.sendScore(totalStars);
   ui.showResults({
     title: lastServeToppled
       ? 'It toppled!'
       : endless
         ? `Order ${orderIdx} served!`
-        : 'Rush complete!',
+        : daily
+          ? 'Daily Rush complete!'
+          : 'Rush complete!',
     scoreText: `Total: ${totalStars} stars`,
     stars: { earned: lastServeStars, max: 3 },
-    bestText: result.improved
-      ? `New best: ${save.bestRushStars} stars!`
-      : `Best: ${save.bestRushStars} stars`,
-    newBest: result.improved,
+    bestText,
+    newBest: celebrated,
     continueRush: !lastServeToppled,
   });
   state = 'results';
@@ -382,7 +425,13 @@ function goToTitle(): void {
   // Idle demo swirl on the title screen.
   setFlavor('vanilla');
   world.swirl.rebuild(3.0, 0, true);
-  ui.showTitle(save.best, save.bestRushStars);
+  ui.showTitle(save.best, save.bestRushStars, {
+    streak: save.dailyStreak,
+    doneToday: dailyDoneToday(
+      { dailyLast: save.dailyLast, dailyStreak: save.dailyStreak },
+      dailyKeyUTC(),
+    ),
+  });
 }
 
 /* ---------------------------- pause / resume ---------------------------- */
@@ -630,6 +679,7 @@ const ui = new UI({
     manualPaused = false;
     resumeGame();
     if (m === 'free') startFree();
+    else if (m === 'daily') startDailyRush();
     else startRush();
   },
   onDone() {
@@ -643,6 +693,7 @@ const ui = new UI({
     manualPaused = false;
     resumeGame();
     if (mode === 'free') startFree();
+    else if (daily) startDailyRush();
     else startRush();
   },
   onMenu() {
@@ -676,6 +727,7 @@ const ui = new UI({
 
 async function boot(): Promise<void> {
   save = normalizeSave(await platform.load(normalizeSave(undefined)));
+  save = withDailyDay(save, dailyKeyUTC());
   goToTitle();
   window.addEventListener('resize', () => world.resize());
   platform.bindLifecycle({

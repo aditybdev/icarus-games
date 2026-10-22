@@ -271,3 +271,49 @@ export function dateSeedUTC(date: Date = new Date()): number {
   const d = date.getUTCDate();
   return ((y * 10000 + m * 100 + d) * 2654435761) >>> 0;
 }
+
+/* --------------------------------------------------------------------------
+ * Icarus Daily — UTC date keys + streak math, shared by all four games.
+ * ------------------------------------------------------------------------ */
+
+/** 'YYYY-MM-DD' key for a UTC date (today by default). */
+export function dailyKeyUTC(date: Date = new Date()): string {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** The day before a 'YYYY-MM-DD' key, in the same format. */
+export function prevDailyKey(key: string): string {
+  const d = new Date(`${key}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return dailyKeyUTC(d);
+}
+
+export interface DailyProgress {
+  /** Last day a daily was completed ('YYYY-MM-DD'), or '' for never. */
+  dailyLast: string;
+  /** Consecutive-day completion streak. */
+  dailyStreak: number;
+}
+
+/**
+ * Fold a completed daily into the progress. Same-day replays leave the
+ * streak untouched; a next-day completion extends it; anything older
+ * restarts it at 1.
+ */
+export function recordDailyCompletion(
+  progress: DailyProgress,
+  todayKey: string,
+): DailyProgress {
+  if (progress.dailyLast === todayKey) return { ...progress };
+  const streak =
+    progress.dailyLast === prevDailyKey(todayKey) ? progress.dailyStreak + 1 : 1;
+  return { dailyLast: todayKey, dailyStreak: Math.max(1, streak) };
+}
+
+/** True when today's daily is already completed. */
+export function dailyDoneToday(progress: DailyProgress, todayKey: string): boolean {
+  return progress.dailyLast === todayKey;
+}

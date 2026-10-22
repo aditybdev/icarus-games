@@ -10,6 +10,7 @@ import { SaveData, galleryCards, totalStars } from './scoring';
 export interface UICallbacks {
   onPlay(): void;
   onContinue(): void;
+  onDaily(): void;
   onSelectLevel(index: number): void;
   onLevelsBack(): void;
   onGallery(): void;
@@ -39,6 +40,7 @@ export class UI {
     const cb = callbacks;
     el<HTMLButtonElement>('btn-play').addEventListener('click', cb.onPlay);
     el<HTMLButtonElement>('btn-continue').addEventListener('click', cb.onContinue);
+    el<HTMLButtonElement>('btn-daily').addEventListener('click', cb.onDaily);
     el<HTMLButtonElement>('btn-levels-back').addEventListener('click', cb.onLevelsBack);
     el<HTMLButtonElement>('btn-gallery').addEventListener('click', cb.onGallery);
     el<HTMLButtonElement>('btn-gallery-back').addEventListener('click', cb.onGalleryBack);
@@ -73,6 +75,31 @@ export class UI {
     const btn = el<HTMLButtonElement>('btn-continue');
     btn.hidden = label === null;
     if (label !== null) btn.textContent = label;
+  }
+
+  /**
+   * Title-screen Daily Fold button state: a small streak label when the
+   * streak is alive, and a "✓" badge once today's daily is done (the daily
+   * stays replayable — the button is never hidden or disabled).
+   */
+  setDaily(streak: number, doneToday: boolean): void {
+    const btn = el<HTMLButtonElement>('btn-daily');
+    btn.textContent = '';
+    const label = document.createElement('span');
+    label.textContent = 'Daily Fold';
+    btn.appendChild(label);
+    if (doneToday) {
+      const badge = document.createElement('span');
+      badge.className = 'daily-badge';
+      badge.textContent = '✓';
+      btn.appendChild(badge);
+    }
+    if (streak > 0) {
+      const sub = document.createElement('span');
+      sub.className = 'daily-sub';
+      sub.textContent = `${streak}-day streak`;
+      btn.appendChild(sub);
+    }
   }
 
   renderLevelGrid(save: SaveData): void {
@@ -181,6 +208,10 @@ export class UI {
       nextName?: string;
       /** Consecutive 3★ completions ending at this level. */
       streak?: number;
+      /** Daily Fold streak after this completion (daily mode only). */
+      dailyStreak?: number;
+      /** Best stars on today's daily so far (shown when replaying the daily). */
+      dailyBest?: number;
     },
   ): void {
     el('screen-results').hidden = !show;
@@ -202,6 +233,13 @@ export class UI {
     const showStreak = opts.stars === 3 && (opts.streak ?? 0) >= 2;
     el('results-streak').hidden = !showStreak;
     if (showStreak) el('results-streak').textContent = `Flawless streak ×${opts.streak}`;
+    // Daily Fold lines (only present in daily mode).
+    const showDaily = opts.dailyStreak !== undefined;
+    el('results-daily').hidden = !showDaily;
+    if (showDaily) el('results-daily').textContent = `Daily streak: ${opts.dailyStreak}`;
+    const showDailyBest = opts.dailyBest !== undefined;
+    el('results-daily-best').hidden = !showDailyBest;
+    if (showDailyBest) el('results-daily-best').textContent = `Daily best: ${opts.dailyBest} ★`;
     el('results-stats').textContent = `Folds ${opts.folds} · Par ${opts.par} · Hints ${opts.hints}`;
     const nextBtn = el<HTMLButtonElement>('btn-next');
     nextBtn.hidden = !opts.hasNext;

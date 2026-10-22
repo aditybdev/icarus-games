@@ -237,6 +237,24 @@
         min-height: 20px;
       }
 
+      /* ---------- daily fold (title button) ---------- */
+      #btn-daily {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      #btn-daily .daily-badge {
+        color: var(--sage);
+        font-weight: 800;
+      }
+      #btn-daily .daily-sub {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+      }
+
       /* ---------- level select ---------- */
       .levels-panel {
         width: min(520px, 100%);
@@ -429,6 +447,21 @@
         font-weight: 700;
         letter-spacing: 0.4px;
       }
+      /* Daily Fold lines on the completion card, same calm gold family. */
+      #results-daily {
+        margin-top: -6px;
+        color: #b08d2e;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+      }
+      #results-daily-best {
+        margin-top: -6px;
+        color: var(--terra);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+      }
       #results-stats {
         color: var(--muted);
         font-size: 15px;
@@ -527,6 +560,7 @@
           <div class="tagline">a calm origami puzzle</div>
           <button class="btn primary big" id="btn-continue" hidden>Continue</button>
           <button class="btn primary big" id="btn-play">Play</button>
+          <button class="btn big" id="btn-daily">Daily Fold</button>
           <button class="btn big" id="btn-gallery">Gallery</button>
           <div id="total-stars"></div>
         </div>
@@ -560,6 +594,8 @@
           <div id="results-stars"></div>
           <div id="results-best" hidden>New best!</div>
           <div id="results-streak" hidden></div>
+          <div id="results-daily" hidden></div>
+          <div id="results-daily-best" hidden></div>
           <div id="results-stats"></div>
           <div class="row">
             <button class="btn" id="btn-retry">Retry</button>

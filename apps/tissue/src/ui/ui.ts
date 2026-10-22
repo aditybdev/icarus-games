@@ -2,6 +2,7 @@
  * DOM UI layer: menu, countdown, HUD, pause and results screens.
  * All gameplay drawing happens on the canvas; this only manages overlays.
  */
+import { dailyDoneToday, dailyKeyUTC } from '@icarus/platform';
 import { ROUND_SIZES, type RoundSize } from '../core/constants';
 import { bestMedalFor, type Medal } from '../core/medals';
 import { formatMs } from '../core/round';
@@ -24,11 +25,16 @@ export interface ResultsData {
   medal: Medal | null;
   /** "next medal in 1.3 s" chase line ("" hides it). */
   nextMedalText: string;
+  /** Daily mode: "Daily best today" line ("" hides it). */
+  dailyBestText?: string;
+  /** Daily mode: current streak line ("" hides it). */
+  dailyStreakText?: string;
 }
 
 export interface UICallbacks {
   onPlay(size: RoundSize): void;
   onBlitz(): void;
+  onDaily(): void;
   onReplay(): void;
   onMenu(): void;
   onResume(): void;
@@ -71,9 +77,14 @@ export class UI {
   private readonly resultsNextMedal = el('results-next-medal');
   private readonly resultsSize = el('results-size');
   private readonly resultsBest = el('results-best');
+  private readonly resultsDailyBest = el('results-daily-best');
+  private readonly resultsDailyStreak = el('results-daily-streak');
   private readonly menuStats = el('menu-stats');
   private readonly skinRow = el('skin-row');
   private readonly skinDots: HTMLButtonElement[] = [];
+  private readonly dailyStreakLabel = el('daily-streak-label');
+  private readonly dailyDoneBadge = el('daily-done-badge');
+  private readonly dailyChip = el('daily-chip');
 
   constructor(cb: UICallbacks) {
     for (const size of ROUND_SIZES) {
@@ -84,6 +95,7 @@ export class UI {
     if (!sub) throw new Error('missing .chip-sub');
     this.remainingSub = sub;
     el<HTMLButtonElement>('btn-blitz').addEventListener('click', () => cb.onBlitz());
+    el<HTMLButtonElement>('btn-daily').addEventListener('click', () => cb.onDaily());
     el<HTMLButtonElement>('pause-btn').addEventListener('click', () => cb.onPause());
     el<HTMLButtonElement>('btn-resume').addEventListener('click', () => cb.onResume());
     el<HTMLButtonElement>('btn-pause-restart').addEventListener('click', () => cb.onRestart());
@@ -142,6 +154,15 @@ export class UI {
         unlocked ? `${skin.name} box skin` : `${skin.name} box skin (locked)`,
       );
     });
+    // Daily Sprint tags: streak flame while a streak is alive, plus a done
+    // badge once today's run is completed (the sprint stays replayable).
+    if (save.dailyStreak > 0) {
+      this.dailyStreakLabel.textContent = `🔥 ${save.dailyStreak}`;
+      this.dailyStreakLabel.hidden = false;
+    } else {
+      this.dailyStreakLabel.hidden = true;
+    }
+    this.dailyDoneBadge.hidden = !dailyDoneToday(save, dailyKeyUTC());
     this.screenMenu.hidden = false;
   }
 
@@ -160,8 +181,8 @@ export class UI {
     this.screenCountdown.hidden = true;
   }
 
-  /** mode 'time': counts remaining tissues; 'blitz': shows the live score. */
-  showHUD(size: number, mode: 'time' | 'blitz' = 'time'): void {
+  /** mode 'time'/'daily': counts remaining tissues; 'blitz': shows the live score. */
+  showHUD(size: number, mode: 'time' | 'blitz' | 'daily' = 'time'): void {
     this.hud.hidden = false;
     this.remainingSub.textContent = mode === 'blitz' ? 'pts' : 'left';
     this.setRemaining(size);
@@ -170,6 +191,8 @@ export class UI {
     this.streakChip.hidden = true;
     this.paceChip.hidden = true;
     this.paceBehind = null;
+    // The DAILY chip stays up for the whole daily round.
+    this.dailyChip.hidden = mode !== 'daily';
   }
 
   hideHUD(): void {
@@ -273,6 +296,13 @@ export class UI {
     this.resultsSize.textContent = data.sizeText ?? `Round of ${data.size}`;
     this.resultsBest.textContent = data.bestText;
     this.resultsBest.classList.toggle('new-best', data.newBest);
+    // Daily Sprint extras: today's best daily time + the current streak.
+    const dailyBestText = data.dailyBestText ?? '';
+    this.resultsDailyBest.textContent = dailyBestText;
+    this.resultsDailyBest.hidden = dailyBestText === '';
+    const dailyStreakText = data.dailyStreakText ?? '';
+    this.resultsDailyStreak.textContent = dailyStreakText;
+    this.resultsDailyStreak.hidden = dailyStreakText === '';
     this.screenResults.hidden = false;
   }
 }

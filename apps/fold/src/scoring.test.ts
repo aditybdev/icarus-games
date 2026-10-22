@@ -12,6 +12,9 @@ import {
   totalStars,
 } from './scoring';
 
+/** Daily fields added to SaveData — spread into test literals. */
+const DAILY_DEFAULTS = { dailyLast: '', dailyStreak: 0, dailyBestStars: 0 };
+
 describe('starsFor', () => {
   it('awards 3 stars for optimal play without hints', () => {
     expect(starsFor(2, 2, 0)).toBe(3);
@@ -71,23 +74,23 @@ describe('continueTarget', () => {
   });
 
   it('jumps to the highest unlocked level with no stars', () => {
-    const save = { v: 1, stars: [3, 3, 0, 0], unlocked: 3 };
+    const save = { v: 1, stars: [3, 3, 0, 0], unlocked: 3, ...DAILY_DEFAULTS };
     expect(continueTarget(save)).toBe(2);
   });
 
   it('skips over completed levels to the highest uncompleted one', () => {
     // Replayed and perfected an earlier level; progress gap at index 2.
-    const save = { v: 1, stars: [3, 0, 3, 0], unlocked: 4 };
+    const save = { v: 1, stars: [3, 0, 3, 0], unlocked: 4, ...DAILY_DEFAULTS };
     expect(continueTarget(save)).toBe(3);
   });
 
   it('falls back to the last unlocked level when all unlocked are complete', () => {
-    const save = { v: 1, stars: [3, 3], unlocked: 2 };
+    const save = { v: 1, stars: [3, 3], unlocked: 2, ...DAILY_DEFAULTS };
     expect(continueTarget(save)).toBe(1);
   });
 
   it('clamps an out-of-range unlocked count to the level list', () => {
-    const save = { v: 1, stars: [3, 0], unlocked: 99 };
+    const save = { v: 1, stars: [3, 0], unlocked: 99, ...DAILY_DEFAULTS };
     expect(continueTarget(save)).toBe(1);
   });
 });
@@ -133,7 +136,7 @@ describe('flawlessStreak (consecutive 3-star run)', () => {
 
 describe('galleryCards (figure-wall unlock derivation)', () => {
   it('unlocks one card per completed level with its best stars', () => {
-    const cards = galleryCards({ v: 1, stars: [3, 0, 2], unlocked: 3 });
+    const cards = galleryCards({ v: 1, stars: [3, 0, 2], unlocked: 3, ...DAILY_DEFAULTS });
     expect(cards).toEqual([
       { unlocked: true, stars: 3 },
       { unlocked: false, stars: 0 },
@@ -164,5 +167,66 @@ describe('save data', () => {
     expect(s.stars[2]).toBe(0);
     expect(s.stars[3]).toBe(0);
     expect(s.unlocked).toBe(30);
+  });
+});
+
+describe('daily save fields (Daily Fold)', () => {
+  it('includes daily defaults in a fresh save', () => {
+    const s = defaultSave(30);
+    expect(s.dailyLast).toBe('');
+    expect(s.dailyStreak).toBe(0);
+    expect(s.dailyBestStars).toBe(0);
+  });
+
+  it('fills daily defaults for old saves that predate them', () => {
+    const s = normalizeSave({ v: 1, stars: [3, 0], unlocked: 2 }, 30, '2026-03-14');
+    expect(s.dailyLast).toBe('');
+    expect(s.dailyStreak).toBe(0);
+    expect(s.dailyBestStars).toBe(0);
+    expect(s.stars[0]).toBe(3); // existing progress untouched
+  });
+
+  it('sanitizes corrupt daily fields', () => {
+    const s = normalizeSave(
+      { v: 1, stars: [], unlocked: 1, dailyLast: 42, dailyStreak: -3, dailyBestStars: 9 },
+      30,
+      '2026-03-14',
+    );
+    expect(s.dailyLast).toBe('');
+    expect(s.dailyStreak).toBe(0);
+    expect(s.dailyBestStars).toBe(0);
+  });
+
+  it('keeps dailyBestStars when the day has not changed', () => {
+    const s = normalizeSave(
+      { v: 1, stars: [], unlocked: 1, dailyLast: '2026-03-14', dailyStreak: 5, dailyBestStars: 2 },
+      30,
+      '2026-03-14',
+    );
+    expect(s.dailyLast).toBe('2026-03-14');
+    expect(s.dailyStreak).toBe(5);
+    expect(s.dailyBestStars).toBe(2);
+  });
+
+  it('resets dailyBestStars when the day has changed', () => {
+    const s = normalizeSave(
+      { v: 1, stars: [], unlocked: 1, dailyLast: '2026-03-13', dailyStreak: 5, dailyBestStars: 3 },
+      30,
+      '2026-03-14',
+    );
+    // dailyLast/dailyStreak stay as-is; the streak itself is only folded by
+    // recordDailyCompletion on the next completion.
+    expect(s.dailyLast).toBe('2026-03-13');
+    expect(s.dailyStreak).toBe(5);
+    expect(s.dailyBestStars).toBe(0);
+  });
+
+  it('also resets dailyBestStars for a never-played daily when a key is passed', () => {
+    const s = normalizeSave(
+      { v: 1, stars: [], unlocked: 1, dailyLast: '', dailyStreak: 0, dailyBestStars: 2 },
+      30,
+      '2026-03-14',
+    );
+    expect(s.dailyBestStars).toBe(0);
   });
 });

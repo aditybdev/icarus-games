@@ -4,9 +4,10 @@
  */
 
 import type { Platform } from '@icarus/platform';
-import { haptics } from '@icarus/platform';
+import { dailyDoneToday, dailyKeyUTC, haptics, recordDailyCompletion } from '@icarus/platform';
 import { AudioFx } from './audio';
 import { Confetti } from './confetti';
+import { dailyLevelIndex } from './daily';
 import {
   Layer,
   PaperState,
@@ -71,6 +72,8 @@ export class Game {
   private screen: Screen = 'title';
   private levelIndex = 0;
   private level: Level = LEVELS[0];
+  /** True while the active puzzle is today's Daily Fold. */
+  private dailyMode = false;
   private state: PaperState = createPaper(LEVELS[0].paper);
   private history: PaperState[] = [];
   private moves: SolutionStep[] = [];
@@ -116,6 +119,10 @@ export class Game {
         this.setPaused(false);
         this.startLevel(target);
       },
+      onDaily: () => {
+        this.setPaused(false);
+        this.startLevel(dailyLevelIndex(), true);
+      },
       onSelectLevel: (i) => {
         this.setPaused(false);
         this.startLevel(i);
@@ -140,14 +147,15 @@ export class Game {
       onHint: () => this.hint(),
       onReset: () => this.reset(),
       onNext: () => this.nextLevel(),
-      onRetry: () => this.startLevel(this.levelIndex),
+      onRetry: () => this.startLevel(this.levelIndex, this.dailyMode),
       onResume: () => this.setPaused(false),
     });
   }
 
   async init(): Promise<void> {
     const loaded = await this.platform.load<SaveData>(defaultSave(LEVELS.length));
-    this.save = normalizeSave(loaded, LEVELS.length);
+    // Pass today's UTC key so a stale dailyBestStars resets on day change.
+    this.save = normalizeSave(loaded, LEVELS.length, dailyKeyUTC());
     this.showTitle();
     this.bindInput();
     this.bindResize();
@@ -164,6 +172,7 @@ export class Game {
     this.ui.setTotalStars(totalStars(this.save));
     const target = continueTarget(this.save);
     this.ui.setContinue(target === null ? null : `Continue — Level ${LEVELS[target].id}`);
+    this.ui.setDaily(this.save.dailyStreak, dailyDoneToday(this.save, dailyKeyUTC()));
     this.ui.showScreen('title');
   }
 
@@ -182,9 +191,10 @@ export class Game {
     this.ui.showScreen('gallery');
   }
 
-  private startLevel(index: number): void {
+  private startLevel(index: number, daily = false): void {
     this.levelIndex = Math.max(0, Math.min(LEVELS.length - 1, index));
     this.level = LEVELS[this.levelIndex];
+    this.dailyMode = daily;
     this.state = createPaper(this.level.paper);
     this.history = [];
     this.moves = [];
@@ -214,7 +224,7 @@ export class Game {
 
   private updateHud(): void {
     this.ui.setHud(
-      `${this.level.id} · ${this.level.name}`,
+      this.dailyMode ? `Daily · ${this.level.name}` : `${this.level.id} · ${this.level.name}`,
       this.hintsLeft,
       this.history.length > 0 && !this.anim,
       {
@@ -448,17 +458,38 @@ export class Game {
     // celebrate a genuine improvement ("New best!").
     const isNewBest = stars > (this.save.stars[this.levelIndex] ?? 0);
     this.save.stars[this.levelIndex] = Math.max(this.save.stars[this.levelIndex] ?? 0, stars);
-    this.save.unlocked = Math.max(
-      this.save.unlocked,
-      Math.min(LEVELS.length, this.levelIndex + 2),
-    );
+    // Daily Fold bookkeeping: a replay keeps the streak, a new day extends it.
+    // Captured BEFORE recording so the card can tell a first completion from
+    // a same-day replay (which shows the "Daily best" line).
+    const todayKey = dailyKeyUTC();
+    const dailyReplay = this.dailyMode && dailyDoneToday(this.save, todayKey);
+    if (this.dailyMode) {
+      const progress = recordDailyCompletion(this.save, todayKey);
+      this.save.dailyLast = progress.dailyLast;
+      this.save.dailyStreak = progress.dailyStreak;
+      this.save.dailyBestStars = Math.max(this.save.dailyBestStars, stars);
+    }
+    // A daily beyond the unlocked frontier still banks its stars above, but
+    // must not skip-unlock the whole path up to it.
+    if (!this.dailyMode || this.levelIndex < this.save.unlocked) {
+      this.save.unlocked = Math.max(
+        this.save.unlocked,
+        Math.min(LEVELS.length, this.levelIndex + 2),
+      );
+    }
     void this.platform.save(this.save);
     this.platform.sendScore(totalStars(this.save));
     this.audio.chime(stars);
     haptics([20, 40, 20]); // gentle double-tap celebration pulse
     if (stars === 3) this.confetti.burst(performance.now(), this.cssW);
     const streak = flawlessStreak(this.save.stars, this.levelIndex);
-    const hasNext = this.levelIndex + 1 < LEVELS.length;
+    // In daily mode only offer Next when the following level is actually
+    // unlocked (the daily itself may be far ahead of the player's progress).
+    const hasNext =
+      this.levelIndex + 1 < LEVELS.length &&
+      (!this.dailyMode || this.levelIndex + 1 < this.save.unlocked);
+    const dailyStreak = this.save.dailyStreak;
+    const dailyBestStars = this.save.dailyBestStars;
     window.setTimeout(() => {
       // Bail if the completion was undone/reset or another level started
       // during the 450ms delay (all of those clear `completed`).
@@ -473,6 +504,8 @@ export class Game {
         isNewBest,
         nextName: hasNext ? LEVELS[this.levelIndex + 1].name : undefined,
         streak,
+        dailyStreak: this.dailyMode ? dailyStreak : undefined,
+        dailyBest: this.dailyMode && dailyReplay ? dailyBestStars : undefined,
       });
     }, 450);
   }

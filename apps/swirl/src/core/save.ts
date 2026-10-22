@@ -4,6 +4,8 @@
  * well-formed { v, best, bestOrderStars } object no matter what was stored.
  */
 
+import { recordDailyCompletion } from '@icarus/platform';
+
 export const SAVE_VERSION = 1;
 
 export interface SaveData {
@@ -14,6 +16,12 @@ export interface SaveData {
   bestOrderStars: number;
   /** Best total stars across any rush run, endless mode included (uncapped). */
   bestRushStars: number;
+  /** Last day the Daily Rush was completed ('YYYY-MM-DD'), '' for never. */
+  dailyLast: string;
+  /** Consecutive-day Daily Rush streak. */
+  dailyStreak: number;
+  /** Best total stars earned on today's Daily Rush (resets each day). */
+  dailyBestStars: number;
 }
 
 export const DEFAULT_SAVE: SaveData = {
@@ -21,6 +29,9 @@ export const DEFAULT_SAVE: SaveData = {
   best: 0,
   bestOrderStars: 0,
   bestRushStars: 0,
+  dailyLast: '',
+  dailyStreak: 0,
+  dailyBestStars: 0,
 };
 
 export const MAX_ORDER_STARS = 9;
@@ -44,6 +55,9 @@ export function normalizeSave(raw: unknown): SaveData {
     bestOrderStars: toNonNegativeInt(r.bestOrderStars, MAX_ORDER_STARS),
     // Endless rush bests pre-date the field: fall back to the legacy 0..9 best.
     bestRushStars: toNonNegativeInt(r.bestRushStars ?? r.bestOrderStars, Number.MAX_SAFE_INTEGER),
+    dailyLast: typeof r.dailyLast === 'string' ? r.dailyLast : '',
+    dailyStreak: toNonNegativeInt(r.dailyStreak, Number.MAX_SAFE_INTEGER),
+    dailyBestStars: toNonNegativeInt(r.dailyBestStars, MAX_ORDER_STARS),
   };
 }
 
@@ -69,6 +83,39 @@ export function withBestStars(
     return { save: { ...save, v: SAVE_VERSION, bestOrderStars: s }, improved: true };
   }
   return { save, improved: false };
+}
+
+/** Zero the daily best when the calendar day has moved on. */
+export function withDailyDay(save: SaveData, todayKey: string): SaveData {
+  if (save.dailyLast === todayKey) return save;
+  return { ...save, dailyBestStars: 0 };
+}
+
+/**
+ * Record a finished Daily Rush run: extends/restarts the streak via the
+ * shared kit and keeps today's best stars. Same-day replays never touch
+ * the streak.
+ */
+export function withDailyResult(
+  save: SaveData,
+  todayKey: string,
+  stars: number,
+): { save: SaveData; improved: boolean } {
+  const s = toNonNegativeInt(stars, MAX_ORDER_STARS);
+  const progress = recordDailyCompletion(
+    { dailyLast: save.dailyLast, dailyStreak: save.dailyStreak },
+    todayKey,
+  );
+  const improved = s > save.dailyBestStars;
+  return {
+    save: {
+      ...save,
+      dailyLast: progress.dailyLast,
+      dailyStreak: progress.dailyStreak,
+      dailyBestStars: improved ? s : save.dailyBestStars,
+    },
+    improved,
+  };
 }
 
 /** Return an updated save if `stars` beats the uncapped endless-rush best. */

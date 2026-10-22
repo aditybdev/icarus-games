@@ -38,16 +38,33 @@ export interface SaveData {
   stars: number[];
   /** number of levels unlocked (1-based count; level 1 always unlocked). */
   unlocked: number;
+  /** Last day the Daily Fold was completed ('YYYY-MM-DD'), or '' for never. */
+  dailyLast: string;
+  /** Consecutive-day Daily Fold completion streak. */
+  dailyStreak: number;
+  /** Best star rating earned on TODAY's daily level (0–3; resets on day change). */
+  dailyBestStars: number;
 }
 
 export const SAVE_VERSION = 1;
 
 export function defaultSave(levelCount: number): SaveData {
-  return { v: SAVE_VERSION, stars: new Array(levelCount).fill(0), unlocked: 1 };
+  return {
+    v: SAVE_VERSION,
+    stars: new Array(levelCount).fill(0),
+    unlocked: 1,
+    dailyLast: '',
+    dailyStreak: 0,
+    dailyBestStars: 0,
+  };
 }
 
-/** Validate / migrate a loaded save object. */
-export function normalizeSave(raw: unknown, levelCount: number): SaveData {
+/**
+ * Validate / migrate a loaded save object. Old saves without the daily fields
+ * are tolerated (defaults filled in). When `todayKey` is given and differs
+ * from `dailyLast`, `dailyBestStars` resets — it only tracks TODAY's daily.
+ */
+export function normalizeSave(raw: unknown, levelCount: number, todayKey?: string): SaveData {
   const fallback = defaultSave(levelCount);
   if (typeof raw !== 'object' || raw === null) return fallback;
   const obj = raw as Partial<SaveData>;
@@ -61,7 +78,15 @@ export function normalizeSave(raw: unknown, levelCount: number): SaveData {
   }
   let unlocked = typeof obj.unlocked === 'number' ? Math.floor(obj.unlocked) : 1;
   unlocked = Math.max(1, Math.min(levelCount, unlocked));
-  return { v: SAVE_VERSION, stars, unlocked };
+  const dailyLast = typeof obj.dailyLast === 'string' ? obj.dailyLast : '';
+  let dailyStreak = typeof obj.dailyStreak === 'number' ? Math.floor(obj.dailyStreak) : 0;
+  if (dailyStreak < 0) dailyStreak = 0;
+  const rawBest = obj.dailyBestStars;
+  let dailyBestStars =
+    typeof rawBest === 'number' && rawBest >= 0 && rawBest <= 3 ? Math.floor(rawBest) : 0;
+  // A new day (or no daily ever completed) means today's best starts at 0.
+  if (todayKey !== undefined && dailyLast !== todayKey) dailyBestStars = 0;
+  return { v: SAVE_VERSION, stars, unlocked, dailyLast, dailyStreak, dailyBestStars };
 }
 
 export function totalStars(save: SaveData): number {

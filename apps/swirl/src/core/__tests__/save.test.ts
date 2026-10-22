@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  withDailyDay,
+  withDailyResult,
   DEFAULT_SAVE,
   MAX_ORDER_STARS,
   normalizeSave,
@@ -27,6 +29,9 @@ describe('normalizeSave', () => {
       best: 120,
       bestOrderStars: 6,
       bestRushStars: 6,
+      dailyLast: '',
+      dailyStreak: 0,
+      dailyBestStars: 0,
     });
   });
 
@@ -36,6 +41,9 @@ describe('normalizeSave', () => {
       best: 77,
       bestOrderStars: 0,
       bestRushStars: 0,
+      dailyLast: '',
+      dailyStreak: 0,
+      dailyBestStars: 0,
     });
   });
 
@@ -64,13 +72,13 @@ describe('withBestScore', () => {
   });
 
   it('keeps the stored best on ties or lower scores', () => {
-    const base = { v: SAVE_VERSION, best: 250, bestOrderStars: 0, bestRushStars: 0 };
+    const base = { ...DEFAULT_SAVE, best: 250 };
     expect(withBestScore(base, 250).improved).toBe(false);
     expect(withBestScore(base, 100).save.best).toBe(250);
   });
 
   it('does not mutate the input save', () => {
-    const base = { v: SAVE_VERSION, best: 10, bestOrderStars: 1, bestRushStars: 1 };
+    const base = { ...DEFAULT_SAVE, best: 10, bestOrderStars: 1, bestRushStars: 1 };
     withBestScore(base, 500);
     expect(base.best).toBe(10);
   });
@@ -89,7 +97,7 @@ describe('withBestStars', () => {
   });
 
   it('keeps the stored best otherwise', () => {
-    const base = { v: SAVE_VERSION, best: 0, bestOrderStars: 7, bestRushStars: 7 };
+    const base = { ...DEFAULT_SAVE, bestOrderStars: 7, bestRushStars: 7 };
     expect(withBestStars(base, 7).improved).toBe(false);
     expect(withBestStars(base, 3).save.bestOrderStars).toBe(7);
   });
@@ -115,5 +123,53 @@ describe('bestRushStars (endless)', () => {
     expect(save.bestRushStars).toBe(23);
     expect(save.bestOrderStars).toBe(MAX_ORDER_STARS);
     expect(withBestRushStars(save, 12).improved).toBe(false);
+  });
+});
+
+describe('daily rush', () => {
+  it('normalizes missing and garbage daily fields to defaults', () => {
+    expect(normalizeSave({ best: 5 }).dailyLast).toBe('');
+    expect(normalizeSave({ dailyLast: 42, dailyStreak: 'x', dailyBestStars: -1 })).toEqual(
+      DEFAULT_SAVE,
+    );
+  });
+
+  it('keeps valid daily fields', () => {
+    const save = normalizeSave({ dailyLast: '2026-10-22', dailyStreak: 4, dailyBestStars: 7 });
+    expect(save.dailyLast).toBe('2026-10-22');
+    expect(save.dailyStreak).toBe(4);
+    expect(save.dailyBestStars).toBe(7);
+  });
+
+  it('withDailyDay zeroes the daily best only when the day moved on', () => {
+    const played = { ...DEFAULT_SAVE, dailyLast: '2026-10-22', dailyStreak: 2, dailyBestStars: 5 };
+    expect(withDailyDay(played, '2026-10-23').dailyBestStars).toBe(0);
+    expect(withDailyDay(played, '2026-10-23').dailyStreak).toBe(2);
+    expect(withDailyDay(played, '2026-10-22')).toBe(played);
+  });
+
+  it('withDailyResult starts a streak and keeps the daily best', () => {
+    const { save, improved } = withDailyResult(DEFAULT_SAVE, '2026-10-23', 7);
+    expect(improved).toBe(true);
+    expect(save.dailyLast).toBe('2026-10-23');
+    expect(save.dailyStreak).toBe(1);
+    expect(save.dailyBestStars).toBe(7);
+  });
+
+  it('extends the streak on consecutive days', () => {
+    const day1 = withDailyResult(DEFAULT_SAVE, '2026-10-22', 5).save;
+    const day2 = withDailyResult(day1, '2026-10-23', 3).save;
+    expect(day2.dailyStreak).toBe(2);
+  });
+
+  it('is idempotent on same-day replays but still tracks the daily best', () => {
+    const first = withDailyResult(DEFAULT_SAVE, '2026-10-23', 5).save;
+    const replay = withDailyResult(first, '2026-10-23', 8);
+    expect(replay.save.dailyStreak).toBe(1);
+    expect(replay.improved).toBe(true);
+    expect(replay.save.dailyBestStars).toBe(8);
+    const worse = withDailyResult(replay.save, '2026-10-23', 2);
+    expect(worse.improved).toBe(false);
+    expect(worse.save.dailyBestStars).toBe(8);
   });
 });

@@ -89,6 +89,24 @@
         box-shadow: 0 2px 0 #54c495, var(--shadow);
       }
 
+      .btn-daily {
+        background: #ffb630;
+        box-shadow: 0 6px 0 #e69a12, var(--shadow);
+        color: #6b4300;
+      }
+
+      .btn-daily:active {
+        box-shadow: 0 2px 0 #e69a12, var(--shadow);
+      }
+
+      .daily-line {
+        margin: 4px 0 0;
+        font-size: 14px;
+        font-weight: 700;
+        color: #b87300;
+        min-height: 18px;
+      }
+
       .btn-big {
         width: 100%;
         font-size: 20px;
@@ -632,6 +650,8 @@
         <div id="title-best" class="best-line"></div>
         <button id="btn-free" class="btn btn-big" type="button">Free Swirl</button>
         <button id="btn-rush" class="btn btn-secondary btn-big" type="button">Order Rush</button>
+        <button id="btn-daily" class="btn btn-daily btn-big" type="button">Daily Rush</button>
+        <p id="daily-line" class="daily-line"></p>
         <p class="howto">Hold to dispense · drag to steer · stay centered or it topples!</p>
       </div>
     </div>

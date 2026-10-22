@@ -5,7 +5,7 @@
 import { FLAVOR_COLORS, FLAVOR_LABELS, FLAVORS, type Flavor, type Order } from '../core/orders';
 import { heightToCm } from '../core/scoring';
 
-export type Mode = 'free' | 'rush';
+export type Mode = 'free' | 'rush' | 'daily';
 
 export interface UICallbacks {
   onMode(mode: Mode): void;
@@ -91,6 +91,7 @@ export class UI {
     this.starReveal = (index) => cb.onStarReveal(index);
     must<HTMLButtonElement>('btn-free').addEventListener('click', () => cb.onMode('free'));
     must<HTMLButtonElement>('btn-rush').addEventListener('click', () => cb.onMode('rush'));
+    must<HTMLButtonElement>('btn-daily').addEventListener('click', () => cb.onMode('daily'));
     this.doneBtn.addEventListener('click', () => cb.onDone());
     must<HTMLButtonElement>('btn-replay').addEventListener('click', () => cb.onReplay());
     this.continueRushBtn.addEventListener('click', () => cb.onContinueRush());
@@ -136,7 +137,11 @@ export class UI {
     }
   }
 
-  showTitle(best: number, bestRushStars: number): void {
+  showTitle(
+    best: number,
+    bestRushStars: number,
+    daily?: { streak: number; doneToday: boolean },
+  ): void {
     this.clearResultsAnims();
     this.show(this.hud, false);
     this.show(this.resultsScreen, false);
@@ -145,18 +150,25 @@ export class UI {
       best > 0 || bestRushStars > 0
         ? `Best swirl: ${best} pts · Best rush: ${bestRushStars} stars`
         : 'No scores yet — make your first swirl!';
+    if (daily) {
+      const btn = must<HTMLButtonElement>('btn-daily');
+      btn.textContent = daily.doneToday ? 'Daily Rush ✓' : 'Daily Rush';
+      must('daily-line').textContent =
+        daily.streak > 0 ? `Daily streak: ${daily.streak} day${daily.streak === 1 ? '' : 's'}` : '';
+    }
     this.show(this.titleScreen, true);
   }
 
   showHUD(mode: Mode): void {
+    const rush = mode !== 'free';
     this.clearResultsAnims();
     this.show(this.titleScreen, false);
     this.show(this.resultsScreen, false);
     this.show(this.hud, true);
-    this.show(this.flavorBar, mode === 'rush');
-    this.show(this.flavorChip, mode === 'rush');
-    this.show(this.orderLabel, mode === 'rush');
-    this.show(this.meterBand, mode === 'rush');
+    this.show(this.flavorBar, rush);
+    this.show(this.flavorChip, rush);
+    this.show(this.orderLabel, rush);
+    this.show(this.meterBand, rush);
     this.show(this.scoreChip, mode === 'free');
     this.show(this.comboChip, false);
     this.lastScore = -1;

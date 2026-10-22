@@ -305,6 +305,55 @@
         box-shadow: 0 2px 0 #dfa63a, var(--shadow);
       }
 
+      /* Daily Sprint entry (Icarus Daily): sunset-gold full-width button. */
+      .btn-daily {
+        gap: 10px;
+        background: #ff9f6e;
+        box-shadow: 0 6px 0 #d9733a, var(--shadow);
+        color: #5c2a00;
+      }
+
+      .btn-daily:active {
+        box-shadow: 0 2px 0 #d9733a, var(--shadow);
+      }
+
+      /* Small pill tags on the daily button: streak flame / done badge. */
+      .daily-tag {
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.55);
+        font-size: 14px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      /* HUD chip shown while a Daily Sprint round is active. */
+      #daily-chip {
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 68px);
+        left: calc(env(safe-area-inset-left, 0px) + 12px);
+        min-height: 36px;
+        padding: 6px 14px;
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: 1px;
+        color: #d9733a;
+        pointer-events: none;
+      }
+
+      /* Daily results lines (best today + current streak). */
+      #results-daily-best {
+        font-size: 15px;
+        font-weight: 800;
+        color: #d9733a;
+      }
+
+      #results-daily-streak {
+        font-size: 15px;
+        font-weight: 800;
+        color: var(--ink-soft);
+      }
+
       .howto {
         margin: 2px 0 0;
         font-size: 14px;
@@ -619,6 +668,7 @@
       </div>
       <div id="streak-chip" class="chip hud-chip" hidden>×2</div>
       <div id="pace-chip" class="chip hud-chip" hidden>+0.0 s</div>
+      <div id="daily-chip" class="chip" hidden>DAILY</div>
     </div>
 
     <div id="streak-pop" hidden></div>
@@ -647,6 +697,11 @@
             <span class="medal-dot" id="medal-100"></span>
           </button>
         </div>
+        <button id="btn-daily" class="btn btn-daily btn-big" type="button">
+          Daily Sprint
+          <span id="daily-streak-label" class="daily-tag" hidden></span>
+          <span id="daily-done-badge" class="daily-tag" hidden>✓ done</span>
+        </button>
         <button id="btn-blitz" class="btn btn-blitz btn-big" type="button">
           Blitz — 30 s score attack
         </button>
@@ -688,6 +743,8 @@
         <div id="results-next-medal" hidden></div>
         <div id="results-size"></div>
         <div id="results-best"></div>
+        <div id="results-daily-best" hidden></div>
+        <div id="results-daily-streak" hidden></div>
         <button id="btn-replay" class="btn btn-big" type="button">Replay</button>
         <button id="btn-results-menu" class="btn btn-secondary btn-big" type="button">Menu</button>
       </div>

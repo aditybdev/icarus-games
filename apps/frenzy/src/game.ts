@@ -3,10 +3,22 @@
  * camera, save data, and host-platform integration.
  */
 import type { Platform } from '@icarus/platform';
-import { haptics, osPrefersReducedMotion } from '@icarus/platform';
+import {
+  dailyDoneToday,
+  dailyKeyUTC,
+  dateSeedUTC,
+  haptics,
+  osPrefersReducedMotion,
+} from '@icarus/platform';
 import { AudioFx } from './audio';
 import { LegInput } from './input';
 import { Renderer } from './render/renderer';
+import {
+  DEFAULT_SAVE,
+  normalizeSave,
+  withDailyCompletion,
+  type SaveData,
+} from './save';
 import { stepSim } from './sim/sim';
 import {
   DT,
@@ -32,14 +44,6 @@ import {
   type Rank,
 } from './sim/rules';
 
-interface SaveData {
-  v: 1;
-  bestTimeMs: number | null;
-  bestRank: string | null;
-  reducedMotion?: boolean;
-  sfx?: boolean;
-}
-
 type UiState = 'title' | 'countdown' | 'playing' | 'paused' | 'results';
 
 /** Countdown beat length (s); full = 3·2·1·GO, quick restart = GO only. */
@@ -48,8 +52,6 @@ const COUNT_FULL_S = COUNT_STEP_S * 4;
 
 /** "FINAL STRETCH!" toast fires once per race past this distance (m). */
 const FINAL_STRETCH_M = 40;
-
-const DEFAULT_SAVE: SaveData = { v: 1, bestTimeMs: null, bestRank: null };
 
 function $(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -78,6 +80,8 @@ export class Game {
   private toastT = 0;
   /** True when the user opened the pause overlay (vs. a host/visibility pause). */
   private manualPaused = false;
+  /** True while the current run is the Icarus Daily Race (date-seeded). */
+  private daily = false;
 
   constructor(private platform: Platform) {
     const canvas = $('scene') as HTMLCanvasElement;
@@ -88,21 +92,15 @@ export class Game {
   }
 
   async init(): Promise<void> {
-    this.save = await this.platform.load<SaveData>({ ...DEFAULT_SAVE });
-    if (this.save.v !== 1) this.save = { ...DEFAULT_SAVE };
+    // Passing today's key drops a stale dailyBestMs when the day rolled over.
+    this.save = normalizeSave(
+      await this.platform.load<SaveData>({ ...DEFAULT_SAVE }),
+      dailyKeyUTC(),
+    );
     // Reduced motion defaults to the OS preference until the user overrides
     // it in settings (undefined = never touched the toggle).
     if (this.save.reducedMotion === undefined) {
       this.save.reducedMotion = osPrefersReducedMotion();
-    }
-    // Sanitize persisted fields: a corrupt bestTimeMs (wrong type / non-finite)
-    // would make `eff < bestTimeMs` permanently false and block all future
-    // best-time saves.
-    if (typeof this.save.bestTimeMs !== 'number' || !Number.isFinite(this.save.bestTimeMs) || this.save.bestTimeMs <= 0) {
-      this.save.bestTimeMs = null;
-    }
-    if (this.save.bestRank !== null && typeof this.save.bestRank !== 'string') {
-      this.save.bestRank = null;
     }
 
     this.input.attach();
@@ -132,7 +130,8 @@ export class Game {
     };
     click('btn-race', () => this.startRun('race'));
     click('btn-train', () => this.startRun('training'));
-    click('btn-retry', () => this.startRun(this.sim.mode, true));
+    click('btn-daily', () => this.startDaily());
+    click('btn-retry', () => this.restart(true));
     click('btn-results-menu', () => this.showTitle());
     click('btn-pause', () => {
       this.manualPaused = true;
@@ -142,7 +141,7 @@ export class Game {
       this.manualPaused = false;
       this.setPaused(false);
     });
-    click('btn-pause-restart', () => this.startRun(this.sim.mode, true));
+    click('btn-pause-restart', () => this.restart(true));
     click('btn-pause-menu', () => this.showTitle());
     click('btn-settings', () => this.openSettings());
     click('btn-pause-settings', () => this.openSettings());
@@ -186,6 +185,21 @@ export class Game {
     }
   }
 
+  private updateDailyLine(): void {
+    const done = dailyDoneToday(this.save, dailyKeyUTC());
+    $('btn-daily').textContent = done ? 'Daily Race ✓' : 'Daily Race';
+    const line = $('daily-line');
+    if (this.save.dailyStreak > 0) {
+      const best =
+        done && this.save.dailyBestMs != null
+          ? ` · today ${formatSeconds(this.save.dailyBestMs)}`
+          : '';
+      line.textContent = `🔥 ${this.save.dailyStreak}-day streak${best}`;
+    } else {
+      line.textContent = 'One seeded race per day — same course worldwide!';
+    }
+  }
+
   // ------------------------------------------------------------- screens
 
   private setScreen(name: UiState): void {
@@ -197,6 +211,10 @@ export class Game {
     $('countdown').classList.toggle('hidden', name !== 'countdown');
     $('hud').classList.toggle('hidden', name === 'title' || name === 'results');
     $('legpad').classList.toggle('hidden', name === 'title' || name === 'results');
+    $('daily-chip').classList.toggle(
+      'hidden',
+      !this.daily || name === 'title' || name === 'results',
+    );
     if (name !== 'paused') this.closeSettings();
   }
 
@@ -206,16 +224,41 @@ export class Game {
     this.sim.body.x = 1.6;
     for (let i = 0; i < 4; i++) this.sim.legs[i].plantX = this.sim.body.x + [0.34, 0.3, -0.3, -0.34][i];
     this.manualPaused = false;
+    this.daily = false;
     this.camX = 0;
     this.input.releaseAll();
     this.audio.setPaused(false);
     this.updateBestLine();
+    this.updateDailyLine();
     this.setScreen('title');
   }
 
   private startRun(mode: GameMode, quick = false): void {
+    this.daily = false;
     this.seedCounter = (this.seedCounter * 1103515245 + 12345) & 0x7fffffff;
-    this.sim = createSim(mode, this.seedCounter || 1);
+    this.beginRun(createSim(mode, this.seedCounter || 1), quick);
+  }
+
+  /**
+   * Daily Race: the same date-seeded course for everyone, worldwide — the
+   * wobble forcing is driven by the sim rng, so dateSeedUTC fixes it per day.
+   */
+  private startDaily(quick = false): void {
+    this.daily = true;
+    this.beginRun(createSim('race', dateSeedUTC() || 1), quick);
+  }
+
+  /** Instant-restart that preserves whether the run was the daily. */
+  private restart(quick: boolean): void {
+    if (this.daily) {
+      this.startDaily(quick);
+    } else {
+      this.startRun(this.sim.mode, quick);
+    }
+  }
+
+  private beginRun(sim: SimState, quick: boolean): void {
+    this.sim = sim;
     this.manualPaused = false;
     this.camX = 0;
     this.shake = 0;
@@ -245,11 +288,11 @@ export class Game {
     if (key === 'r') {
       if (this.ui === 'playing' || this.ui === 'paused' || this.ui === 'results') {
         this.audio.click();
-        this.startRun(this.sim.mode, true);
+        this.restart(true);
       }
     } else if (this.ui === 'results') {
       this.audio.click();
-      this.startRun(this.sim.mode, true);
+      this.restart(true);
     }
   }
 
@@ -325,7 +368,8 @@ export class Game {
     this.shake = Math.max(0, this.shake - frameDt * 2.2);
 
     if (active) this.updateHud();
-    const pb = this.save.bestTimeMs;
+    // In the Daily Race the pace flag chases today's best daily time instead.
+    const pb = this.daily ? this.save.dailyBestMs : this.save.bestTimeMs;
     this.renderer.draw(this.sim, {
       camX: this.camX,
       nowMs: t,
@@ -453,13 +497,25 @@ export class Game {
         this.save.bestTimeMs = eff;
         this.save.bestRank = rank;
         newBest = true;
-        void this.platform.save(this.save);
       }
     }
+    // Daily Race: stamp today, bump the streak and keep today's best time.
+    let dailyImproved = false;
+    let dailyStreak = 0;
+    if (this.daily && s.finished) {
+      const result = withDailyCompletion(this.save, dailyKeyUTC(), eff);
+      this.save = result.save;
+      dailyImproved = result.improved;
+      dailyStreak = result.streak;
+    }
+    // A daily completion or a new best must be persisted immediately.
+    if ((this.daily && s.finished) || newBest) void this.platform.save(this.save);
     this.platform.sendScore(score);
 
     $('results-title').textContent = s.finished
-      ? 'Finished!'
+      ? this.daily
+        ? 'Daily Race done!'
+        : 'Finished!'
       : s.timedOut
         ? s.distance > 45
           ? `SO CLOSE — ${formatMetres(s.distance)}!`
@@ -483,6 +539,14 @@ export class Game {
     lines.push(`Stumbles: ${s.stumbles} · Wipeouts: ${s.wipeouts}`);
     if (s.mode === 'race' && this.save.bestTimeMs != null) {
       lines.push(`Best: ${formatSeconds(this.save.bestTimeMs)}`);
+    }
+    if (this.daily && s.finished) {
+      lines.push(
+        dailyImproved
+          ? `New daily best: ${formatSeconds(this.save.dailyBestMs ?? eff)}!`
+          : `Daily best today: ${formatSeconds(this.save.dailyBestMs ?? eff)}`,
+      );
+      lines.push(dailyStreak === 1 ? '🔥 1-day streak' : `🔥 ${dailyStreak}-day streak`);
     }
     const stats = $('results-stats');
     stats.textContent = '';

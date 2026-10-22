@@ -120,6 +120,15 @@
       opacity: 0; transition: opacity .22s ease;
     }
     #penalty-chip.show, #toast.show { opacity: 1; }
+
+    /* Daily Race entry (Icarus Daily): sunset-gold button + HUD chip. */
+    #btn-daily { background: #ffb630; box-shadow: 0 5px 0 #e69a12, 0 8px 14px rgba(0,0,0,.25); color: #5c3a00; }
+    #btn-daily:active { box-shadow: 0 1px 0 #e69a12; }
+    #daily-line { font-size: .95rem; font-weight: 800; color: var(--cream);
+      text-shadow: 0 1px 3px rgba(0,0,0,.45); }
+    #daily-chip {
+      background: #ffb630; color: #5c3a00; letter-spacing: .08em;
+    }
     #btn-pause {
       pointer-events: auto; margin-left: auto;
       width: 48px; height: 48px; min-width: 0; border-radius: 12px; padding: 0;
@@ -206,6 +215,7 @@
     <div class="chip" id="hud-speed">0.0 m/s</div>
     <div class="chip hidden" id="hud-pace">pace: —</div>
     <div class="chip" id="hud-falls">Falls 0</div>
+    <div class="chip hidden" id="daily-chip">DAILY</div>
     <button class="btn" id="btn-pause" aria-label="Pause">II</button>
   </div>
 
@@ -240,6 +250,8 @@
     <div class="tagline">Wobble. Stomp. Stampede-ish.</div>
     <div id="best-line"></div>
     <button class="btn" id="btn-race">Race 50 m</button>
+    <button class="btn" id="btn-daily">Daily Race</button>
+    <div id="daily-line"></div>
     <button class="btn secondary" id="btn-train">Training</button>
     <div class="howto">Hold a leg to swing it forward, release to stomp. Alternate diagonals — FL+BR then FR+BL — for maximum wobble-speed!</div>
   </div>
