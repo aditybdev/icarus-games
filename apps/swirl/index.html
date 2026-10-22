@@ -198,6 +198,11 @@
           calc(env(safe-area-inset-bottom, 0px) + 16px)
           calc(env(safe-area-inset-left, 0px) + 16px);
         background: rgba(255, 241, 230, 0.72);
+        /* Soft entry on every screen swap (restarts when [hidden] toggles). */
+        animation: screen-in 0.18s ease-out;
+      }
+      @keyframes screen-in {
+        from { opacity: 0; transform: translateY(6px); }
       }
 
       .card {
@@ -604,9 +609,13 @@
         #meter-band.flash,
         #meter-fill.turbo,
         #combo-chip.hot,
-        .flavor-btn.hint-pulse {
+        .flavor-btn.hint-pulse,
+        .screen {
           animation: none;
         }
+      }
+      body.reduced-motion .screen {
+        animation: none;
       }
 
       #results-score {

@@ -133,7 +133,16 @@
           calc(env(safe-area-inset-bottom, 0px) + 16px)
           calc(env(safe-area-inset-left, 0px) + 16px);
         background: rgba(198, 235, 255, 0.66);
+        /* Soft entry on every screen swap (restarts when [hidden] toggles). */
+        animation: screen-in 0.18s ease-out;
       }
+      @keyframes screen-in {
+        from { opacity: 0; transform: translateY(6px); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .screen { animation: none; }
+      }
+      body.reduced-motion .screen { animation: none; }
 
       .card {
         width: min(92vw, 380px);
@@ -274,6 +283,11 @@
         background-clip: padding-box;
         cursor: pointer;
         box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.12);
+        transition: transform 0.06s ease;
+      }
+
+      .skin-dot:not(.locked):active {
+        transform: scale(0.88);
       }
 
       .skin-dot.selected {

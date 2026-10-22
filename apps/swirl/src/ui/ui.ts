@@ -42,6 +42,7 @@ let reducedMotion =
 /** Override the reduced-motion gate from the user settings toggle. */
 export function setReducedMotion(v: boolean): void {
   reducedMotion = v;
+  document.body.classList.toggle('reduced-motion', v);
 }
 
 function must<T extends HTMLElement>(id: string): T {

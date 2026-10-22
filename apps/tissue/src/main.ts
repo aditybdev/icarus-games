@@ -558,6 +558,7 @@ function bindSettings(): void {
     save = { ...save, reducedMotion: motionBox.checked };
     reducedMotion = motionBox.checked;
     renderer.setReducedMotion(reducedMotion);
+    document.body.classList.toggle('reduced-motion', reducedMotion);
     profile.settings.reducedMotion = motionBox.checked;
     saveSharedProfile(profile);
     void platform.save(save);
@@ -578,6 +579,7 @@ async function boot(): Promise<void> {
   sfxOn = save.sfx !== false;
   reducedMotion = save.reducedMotion === true;
   renderer.setReducedMotion(reducedMotion);
+  document.body.classList.toggle('reduced-motion', reducedMotion);
   setHapticsEnabled(save.haptics !== false);
   recordPlay(profile, 'tissue', masteryFor(save));
   saveSharedProfile(profile);

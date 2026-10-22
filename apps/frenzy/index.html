@@ -33,7 +33,16 @@
       align-items: center; justify-content: center; gap: 14px;
       padding: calc(16px + var(--sat)) calc(16px + var(--sar)) calc(16px + var(--sab)) calc(16px + var(--sal));
       z-index: 30; text-align: center;
+      /* Soft entry on every screen swap (restarts when .hidden toggles). */
+      animation: screen-in 0.18s ease-out;
     }
+    @keyframes screen-in {
+      from { opacity: 0; transform: translateY(6px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .screen { animation: none; }
+    }
+    body.reduced-motion .screen { animation: none; }
     .hidden { display: none !important; }
 
     /* ---------- countdown ---------- */

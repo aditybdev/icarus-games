@@ -197,6 +197,7 @@ export class Game {
   private applyReducedMotion(on: boolean): void {
     this.reducedMotion = on;
     this.foldAnimMs = on ? FOLD_ANIM_MS_REDUCED : FOLD_ANIM_MS;
+    document.body.classList.toggle('reduced-motion', on);
   }
 
   /** Mirror the current mastery into the shared profile (never lowers it). */

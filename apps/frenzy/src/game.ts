@@ -93,6 +93,15 @@ export class Game {
   private daily = false;
   /** Cross-game profile (shared localStorage key on same-origin web). */
   private profile: IcarusProfile = defaultProfile();
+  // HUD write caches — updateHud runs every frame; only touch the DOM when the
+  // rendered string actually changes.
+  private lastDistFill = '';
+  private lastDistText = '';
+  private lastTimer = '';
+  private lastSpeed = '';
+  private lastFalls = '';
+  private lastPace = '';
+  private lastCaretPct: Record<string, string> = {};
 
   constructor(private platform: Platform) {
     const canvas = $('scene') as HTMLCanvasElement;
@@ -169,6 +178,7 @@ export class Game {
 
     $('set-motion').addEventListener('change', (e) => {
       this.save.reducedMotion = (e.target as HTMLInputElement).checked;
+      document.body.classList.toggle('reduced-motion', this.save.reducedMotion === true);
       this.profile.settings.reducedMotion = this.save.reducedMotion;
       saveSharedProfile(this.profile);
       void this.platform.save(this.save);
@@ -195,6 +205,7 @@ export class Game {
     ($('set-sfx') as HTMLInputElement).checked = this.save.sfx !== false;
     ($('set-haptics') as HTMLInputElement).checked = this.save.haptics !== false;
     this.audio.setSfx(this.save.sfx !== false);
+    document.body.classList.toggle('reduced-motion', this.save.reducedMotion === true);
   }
 
   private openSettings(): void {
@@ -491,25 +502,55 @@ export class Game {
     const eff = effectiveTimeMs(s.timeMs, s.penaltyMs);
     const dist = Math.min(TRACK_LENGTH, s.distance);
     const race = s.mode === 'race';
-    ($('dist-fill') as HTMLElement).style.width = `${Math.min(100, (dist / TRACK_LENGTH) * 100)}%`;
-    $('dist-text').textContent =
-      race ? `${formatMetres(dist)} / ${TRACK_LENGTH} m` : formatMetres(s.distance);
-    $('hud-timer').textContent =
-      race
-        ? Math.max(0, (RACE_LIMIT_MS - eff) / 1000).toFixed(1)
-        : formatSeconds(s.timeMs);
-    $('hud-speed').textContent = `${s.body.v.toFixed(1)} m/s`;
-    $('hud-falls').textContent = `Stumbles ${s.stumbles} · Wipeouts ${s.wipeouts}`;
+    const distFill = `${Math.min(100, (dist / TRACK_LENGTH) * 100).toFixed(1)}%`;
+    if (distFill !== this.lastDistFill) {
+      this.lastDistFill = distFill;
+      ($('dist-fill') as HTMLElement).style.width = distFill;
+    }
+    const distText = race ? `${formatMetres(dist)} / ${TRACK_LENGTH} m` : formatMetres(s.distance);
+    if (distText !== this.lastDistText) {
+      this.lastDistText = distText;
+      $('dist-text').textContent = distText;
+    }
+    const timer = race
+      ? Math.max(0, (RACE_LIMIT_MS - eff) / 1000).toFixed(1)
+      : formatSeconds(s.timeMs);
+    if (timer !== this.lastTimer) {
+      this.lastTimer = timer;
+      $('hud-timer').textContent = timer;
+    }
+    const speed = `${s.body.v.toFixed(1)} m/s`;
+    if (speed !== this.lastSpeed) {
+      this.lastSpeed = speed;
+      $('hud-speed').textContent = speed;
+    }
+    const falls = `Stumbles ${s.stumbles} · Wipeouts ${s.wipeouts}`;
+    if (falls !== this.lastFalls) {
+      this.lastFalls = falls;
+      $('hud-falls').textContent = falls;
+    }
 
     // Pace ladder: sliding rank carets + projected-rank chip (race only).
     for (const t of RANK_THRESHOLDS_MS) {
       const el = $(`caret-${t.rank.toLowerCase()}`);
       el.classList.toggle('hidden', !race);
-      if (race) el.style.left = `${paceBarPct(eff, t.maxMs)}%`;
+      if (race) {
+        const pct = `${paceBarPct(eff, t.maxMs).toFixed(2)}%`;
+        if (pct !== this.lastCaretPct[t.rank]) {
+          this.lastCaretPct[t.rank] = pct;
+          el.style.left = pct;
+        }
+      }
     }
     const paceChip = $('hud-pace');
     paceChip.classList.toggle('hidden', !race);
-    if (race) paceChip.textContent = `pace: ${projectedRank(eff, dist) ?? '—'}`;
+    if (race) {
+      const pace = `pace: ${projectedRank(eff, dist) ?? '—'}`;
+      if (pace !== this.lastPace) {
+        this.lastPace = pace;
+        paceChip.textContent = pace;
+      }
+    }
 
     if (race && !this.finalStretchShown && s.distance >= FINAL_STRETCH_M) {
       this.finalStretchShown = true;
