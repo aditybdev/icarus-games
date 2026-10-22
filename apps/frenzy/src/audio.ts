@@ -32,7 +32,7 @@ export class AudioFx {
         this.ac = null;
       }
     }
-    if (this.ac?.state === 'suspended') void this.ac.resume();
+    if (this.ac?.state === 'suspended') this.ac.resume().catch(() => {});
   }
 
   setSfx(on: boolean): void {

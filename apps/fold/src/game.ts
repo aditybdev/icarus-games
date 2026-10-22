@@ -20,9 +20,9 @@ import {
   FoldAnim,
   View,
   creaseArrows,
+  creaseScreenSeg,
   renderScene,
   toPaper,
-  toScreen,
 } from './renderer';
 import {
   HINTS_PER_LEVEL,
@@ -122,12 +122,14 @@ export class Game {
 
   private showTitle(): void {
     this.screen = 'title';
+    this.anim = null; // cancel any in-flight fold when leaving the puzzle
     this.ui.setTotalStars(totalStars(this.save));
     this.ui.showScreen('title');
   }
 
   private showLevels(): void {
     this.screen = 'levels';
+    this.anim = null; // cancel any in-flight fold when leaving the puzzle
     this.ui.renderLevelGrid(this.save);
     this.ui.setTotalStars(totalStars(this.save));
     this.ui.showScreen('levels');
@@ -204,12 +206,14 @@ export class Game {
       }
     }
 
-    // 2) Select the nearest crease within touch range.
+    // 2) Select the nearest crease within touch range. Hit-test the same
+    // screen-space segment that is drawn (clipped to the play area), so the
+    // visible dashed line is exactly what is tappable.
     let best: { id: string; d: number } | null = null;
     for (const crease of this.level.creases) {
-      const A = toScreen(view, crease.a);
-      const B = toScreen(view, crease.b);
-      const d = distToSegment(pt(x, y), A, B);
+      const seg = creaseScreenSeg(view, { a: crease.a, b: crease.b });
+      if (!seg) continue;
+      const d = distToSegment(pt(x, y), seg[0], seg[1]);
       if (d < 22 && (!best || d < best.d)) best = { id: crease.id, d };
     }
     if (best) {
@@ -257,6 +261,7 @@ export class Game {
     this.selectedId = null;
     this.hintId = null;
     this.audio.swish();
+    this.updateHud(); // disable Undo while the fold animation runs
   }
 
   private commitFold(): void {
@@ -343,7 +348,9 @@ export class Game {
     this.platform.sendScore(totalStars(this.save));
     this.audio.chime();
     window.setTimeout(() => {
-      if (this.screen !== 'puzzle') return;
+      // Bail if the completion was undone/reset or another level started
+      // during the 450ms delay (all of those clear `completed`).
+      if (this.screen !== 'puzzle' || !this.completed) return;
       this.ui.showResults(true, {
         stars,
         folds: this.moves.length,
@@ -379,11 +386,18 @@ export class Game {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.cssW = window.innerWidth;
     this.cssH = window.innerHeight;
-    this.canvas.width = Math.round(this.cssW * dpr);
-    this.canvas.height = Math.round(this.cssH * dpr);
-    this.canvas.style.width = `${this.cssW}px`;
-    this.canvas.style.height = `${this.cssH}px`;
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const pxW = Math.round(this.cssW * dpr);
+    const pxH = Math.round(this.cssH * dpr);
+    // Skip the backing-store realloc (which also resets all canvas state)
+    // when nothing actually changed — resize and orientationchange both
+    // fire on rotation.
+    if (this.canvas.width !== pxW || this.canvas.height !== pxH) {
+      this.canvas.width = pxW;
+      this.canvas.height = pxH;
+      this.canvas.style.width = `${this.cssW}px`;
+      this.canvas.style.height = `${this.cssH}px`;
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
     const hud = document.getElementById('hud');
     this.hudH = hud && !hud.hidden ? hud.getBoundingClientRect().height : 72;
   }
@@ -392,7 +406,7 @@ export class Game {
     requestAnimationFrame((t) => this.tick(t));
     if (this.flash && now > this.flash.until) this.flash = null;
 
-    if (!this.paused && this.anim) {
+    if (!this.paused && this.anim && this.screen === 'puzzle') {
       const raw = (now - this.anim.start) / FOLD_ANIM_MS;
       if (raw >= 1) {
         this.commitFold();
@@ -415,7 +429,11 @@ export class Game {
 
     let animView: FoldAnim | null = null;
     if (this.anim) {
-      const raw = Math.min(1, (now - this.anim.start) / FOLD_ANIM_MS);
+      // While paused, freeze the animation clock at the pause instant so the
+      // fold does not visually complete behind the pause overlay (resume
+      // shifts `start` by the pause duration, continuing seamlessly).
+      const animNow = this.paused ? this.pauseStarted : now;
+      const raw = Math.min(1, (animNow - this.anim.start) / FOLD_ANIM_MS);
       const eased = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2;
       animView = {
         line: this.anim.line,

@@ -32,10 +32,20 @@ type GameState = 'title' | 'orderCard' | 'playing' | 'toppling' | 'between' | 'r
 const platform = createPlatform('swirl');
 const audio = new AudioSfx();
 
+// Register error reporters before any fallible setup (renderer creation etc.).
+window.addEventListener('error', (e) => {
+  platform.reportError('swirl', e.error ?? e.message);
+});
+window.addEventListener('unhandledrejection', (e) => {
+  platform.reportError('swirl', e.reason);
+});
+
 let save: SaveData = normalizeSave(undefined);
 let state: GameState = 'title';
 let mode: Mode = 'free';
 let paused = false;
+/** True when the user opened the pause overlay (vs. a host/visibility pause). */
+let manualPaused = false;
 
 // Round state.
 let height = 0;
@@ -411,6 +421,9 @@ const ui = new UI({
     audio.unlock();
     audio.setEnabled(platform.isAudioEnabled() && !paused);
     audio.click();
+    // Leaving the pause overlay via any path must restart the render loop.
+    manualPaused = false;
+    resumeGame();
     if (m === 'free') startFree();
     else startRush();
   },
@@ -422,18 +435,24 @@ const ui = new UI({
   },
   onReplay() {
     audio.click();
+    manualPaused = false;
+    resumeGame();
     if (mode === 'free') startFree();
     else startRush();
   },
   onMenu() {
     audio.click();
+    manualPaused = false;
+    resumeGame();
     goToTitle();
   },
   onResume() {
     audio.click();
+    manualPaused = false;
     resumeGame();
   },
   onPause() {
+    manualPaused = true;
     pauseGame();
   },
   onFlavor(flavor) {
@@ -446,18 +465,17 @@ async function boot(): Promise<void> {
   save = normalizeSave(await platform.load(normalizeSave(undefined)));
   goToTitle();
   window.addEventListener('resize', () => world.resize());
-  platform.bindLifecycle({ pause: pauseGame, resume: resumeGame });
+  platform.bindLifecycle({
+    pause: pauseGame,
+    resume: () => {
+      // A host/visibility resume must not dismiss a pause the user chose.
+      if (!manualPaused) resumeGame();
+    },
+  });
   platform.onAudioEnabledChange((enabled) => {
     audio.setEnabled(enabled && !paused);
   });
   rafId = requestAnimationFrame(loop);
 }
-
-window.addEventListener('error', (e) => {
-  platform.reportError('swirl', e.error ?? e.message);
-});
-window.addEventListener('unhandledrejection', (e) => {
-  platform.reportError('swirl', e.reason);
-});
 
 void boot();

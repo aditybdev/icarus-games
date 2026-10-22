@@ -118,12 +118,9 @@ export class UI {
   }
 
   setPaused(on: boolean): void {
-    if (on) {
-      this.hideScreens();
-      this.screenPause.hidden = false;
-    } else {
-      this.screenPause.hidden = true;
-    }
+    // The pause screen overlays whatever is currently shown (e.g. the
+    // countdown) instead of replacing it, so resume restores it untouched.
+    this.screenPause.hidden = !on;
   }
 
   showResults(data: ResultsData): void {

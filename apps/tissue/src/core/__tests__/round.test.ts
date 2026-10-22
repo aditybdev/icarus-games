@@ -177,6 +177,69 @@ describe('streak tiers', () => {
   });
 });
 
+describe('rapid-fire re-grab (overlapped pop)', () => {
+  it('allows an immediate re-grab when the next sheet is already up', () => {
+    const clock = new FakeClock();
+    const round = createRound(25);
+
+    // First rip, then flightDone + nextReady with ZERO elapsed time — the
+    // path main.ts takes when the pop finished during the pull itself.
+    const first = pullOnce(round, clock);
+    expect(first.accepted).toBe(true);
+    flightDone(round);
+    nextReady(round);
+    expect(round.phase).toBe('idle');
+    expect(grab(round, clock)).toBe(true);
+
+    // Gap of 0 ms between detaches must be classified blazing.
+    updatePull(round, PULL_THRESHOLD_PX + 10);
+    const second = release(round, clock);
+    expect(second.accepted).toBe(true);
+    expect(second.tier).toBe('blazing');
+    expect(second.streak).toBe(2);
+  });
+
+  it('phase guards make premature flightDone/nextReady harmless', () => {
+    const clock = new FakeClock();
+    const round = createRound(25);
+
+    expect(grab(round, clock)).toBe(true);
+    updatePull(round, 50);
+    // Renderer signalling while a pull is held must not corrupt the phase.
+    flightDone(round);
+    nextReady(round);
+    expect(round.phase).toBe('pulling');
+
+    updatePull(round, PULL_THRESHOLD_PX + 10);
+    const res = release(round, clock);
+    expect(res.accepted).toBe(true);
+    expect(round.phase).toBe('flying');
+  });
+
+  it('a snap-back between rips leaves the streak gap anchored to the last detach', () => {
+    const clock = new FakeClock();
+    const round = createRound(50);
+
+    expect(pullOnce(round, clock).accepted).toBe(true);
+    clock.advance(150);
+
+    // Short pull -> snap back (what pause/cancel also produces).
+    flightDone(round);
+    nextReady(round);
+    expect(grab(round, clock)).toBe(true);
+    updatePull(round, 40);
+    const weak = release(round, clock);
+    expect(weak.accepted).toBe(false);
+    expect(round.streak).toBe(1); // untouched by the failed pull
+
+    clock.advance(80); // 150 + 80 = 230 ms since the last detach
+    const res = pullOnce(round, clock);
+    expect(res.accepted).toBe(true);
+    expect(res.tier).toBe('blazing');
+    expect(res.streak).toBe(2);
+  });
+});
+
 describe('full round simulation', () => {
   it('a 50-pull round reaches finished with a sane time and score', () => {
     const clock = new FakeClock();

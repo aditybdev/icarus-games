@@ -29,6 +29,11 @@
         box-sizing: border-box;
         -webkit-tap-highlight-color: transparent;
       }
+      /* The UA rule [hidden]{display:none} loses to author display rules
+         (.screen/#hud use display:flex), so restore it explicitly. */
+      [hidden] {
+        display: none !important;
+      }
       html,
       body {
         margin: 0;
@@ -291,6 +296,11 @@
         }
         #hud .hud-actions .btn {
           padding: 10px 9px;
+        }
+        /* Keep level cells >= 44px touch targets on narrow phones
+           (5 columns at 320px yields ~41.6px cells). */
+        #level-grid {
+          grid-template-columns: repeat(4, 1fr);
         }
       }
     </style>

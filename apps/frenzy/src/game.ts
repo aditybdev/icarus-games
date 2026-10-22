@@ -60,6 +60,15 @@ export class Game {
   async init(): Promise<void> {
     this.save = await this.platform.load<SaveData>({ ...DEFAULT_SAVE });
     if (this.save.v !== 1) this.save = { ...DEFAULT_SAVE };
+    // Sanitize persisted fields: a corrupt bestTimeMs (wrong type / non-finite)
+    // would make `eff < bestTimeMs` permanently false and block all future
+    // best-time saves.
+    if (typeof this.save.bestTimeMs !== 'number' || !Number.isFinite(this.save.bestTimeMs) || this.save.bestTimeMs <= 0) {
+      this.save.bestTimeMs = null;
+    }
+    if (this.save.bestRank !== null && typeof this.save.bestRank !== 'string') {
+      this.save.bestRank = null;
+    }
 
     this.input.attach();
     window.addEventListener('resize', () => this.renderer.resize());
@@ -116,10 +125,14 @@ export class Game {
 
   private openSettings(): void {
     $('screen-settings').classList.remove('hidden');
+    // The gear sits at z-index 40, above the settings overlay (35) — hide it
+    // while the overlay is open.
+    $('btn-settings').classList.add('hidden');
   }
 
   private closeSettings(): void {
     $('screen-settings').classList.add('hidden');
+    $('btn-settings').classList.toggle('hidden', this.ui !== 'title');
   }
 
   private updateBestLine(): void {

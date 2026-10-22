@@ -190,6 +190,22 @@ function clipSegToRect(a: Pt, b: Pt, r: Rect): [Pt, Pt] | null {
   ];
 }
 
+/**
+ * Screen-space crease segment as actually drawn: the infinite crease line
+ * clipped to the play rect (plus margin). Used for BOTH drawing and
+ * hit-testing so the visible dashed line is exactly what is tappable.
+ */
+export function creaseScreenSeg(v: View, line: Line): [Pt, Pt] | null {
+  const margin = 40;
+  const clipRect: Rect = {
+    x: v.play.x - margin,
+    y: v.play.y - margin,
+    w: v.play.w + margin * 2,
+    h: v.play.h + margin * 2,
+  };
+  return clipSegToRect(toScreen(v, line.a), toScreen(v, line.b), clipRect);
+}
+
 // ---------------------------------------------------------------------------
 // Crease arrows (selection UI) — computed in screen space for stable 48px+
 // touch targets.
@@ -341,17 +357,8 @@ function drawAnimLayers(
 }
 
 function drawCreases(ctx: CanvasRenderingContext2D, v: View, scene: Scene): void {
-  const margin = 40;
-  const clipRect: Rect = {
-    x: v.play.x - margin,
-    y: v.play.y - margin,
-    w: v.play.w + margin * 2,
-    h: v.play.h + margin * 2,
-  };
   for (const crease of scene.level.creases) {
-    const A = toScreen(v, crease.a);
-    const B = toScreen(v, crease.b);
-    const seg = clipSegToRect(A, B, clipRect);
+    const seg = creaseScreenSeg(v, { a: crease.a, b: crease.b });
     if (!seg) continue;
     const isSelected = crease.id === scene.selectedId;
     const isHint = crease.id === scene.hintId;

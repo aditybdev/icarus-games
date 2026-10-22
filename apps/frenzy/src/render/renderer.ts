@@ -50,6 +50,8 @@ export class Renderer {
   private dpr = 1;
   private puffs: Puff[] = [];
 
+  private skyGrad: CanvasGradient | null = null;
+
   constructor(private canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('no 2d context');
@@ -63,6 +65,7 @@ export class Renderer {
     this.h = window.innerHeight;
     this.canvas.width = Math.round(this.w * this.dpr);
     this.canvas.height = Math.round(this.h * this.dpr);
+    this.skyGrad = null; // gradient depends on h — rebuild lazily
   }
 
   /** Dust puff at a hoof plant (world x). */
@@ -76,7 +79,10 @@ export class Renderer {
   }
 
   private get groundY(): number {
-    return this.h > this.w ? this.h * 0.55 : this.h * 0.72;
+    if (this.h > this.w) return this.h * 0.55;
+    // Short landscape (phones): the leg pad occupies ~40% of the height, so
+    // keep the creature above it instead of at 0.72·h behind the buttons.
+    return this.h < 520 ? this.h * 0.55 : this.h * 0.72;
   }
 
   private sx(wx: number, camX: number): number {
@@ -114,11 +120,14 @@ export class Renderer {
 
   private drawSky(camX: number, nowMs: number): void {
     const { ctx, w, h } = this;
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, '#7ec8ff');
-    g.addColorStop(0.7, '#cfeeff');
-    g.addColorStop(1, '#e8f7ff');
-    ctx.fillStyle = g;
+    if (!this.skyGrad) {
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#7ec8ff');
+      g.addColorStop(0.7, '#cfeeff');
+      g.addColorStop(1, '#e8f7ff');
+      this.skyGrad = g;
+    }
+    ctx.fillStyle = this.skyGrad;
     ctx.fillRect(0, 0, w, h);
 
     // sun
@@ -141,7 +150,10 @@ export class Renderer {
       cx = base + (((cx - base) % span) + span) % span - 4;
       const cy = h * (0.08 + hash(i + 20) * 0.2);
       const drift = Math.sin(nowMs * 0.0001 + i) * 6;
-      const px = ((cx - base) * ppm + w * 0.3) % (w + 200) - 100 + drift;
+      // Positive modulo: the raw value can be negative, which made clouds pop
+      // at the left edge.
+      const spanPx = w + 200;
+      const px = ((((cx - base) * ppm + w * 0.3) % spanPx) + spanPx) % spanPx - 100 + drift;
       const s = ppm * (0.5 + hash(i + 40) * 0.5);
       ctx.beginPath();
       ctx.arc(px, cy, s * 0.32, 0, Math.PI * 2);
@@ -296,7 +308,12 @@ export class Renderer {
   private drawPuffs(camX: number, nowMs: number): void {
     const { ctx } = this;
     const ppm = this.ppm;
-    this.puffs = this.puffs.filter((p) => nowMs - p.birth < 450);
+    // Compact expired puffs in place (no per-frame array allocation).
+    let keep = 0;
+    for (let read = 0; read < this.puffs.length; read++) {
+      if (nowMs - this.puffs[read].birth < 450) this.puffs[keep++] = this.puffs[read];
+    }
+    this.puffs.length = keep;
     for (const p of this.puffs) {
       const age = (nowMs - p.birth) / 450;
       const r = ppm * (p.big ? 0.22 : 0.13) * (0.4 + age);

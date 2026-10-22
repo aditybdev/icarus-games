@@ -159,6 +159,21 @@ describe('folding', () => {
     expect(fold(state, edge, -1)).toBe(state);
   });
 
+  it('degenerate crease (zero-length line) is a safe no-op, never NaN', () => {
+    const state = createPaper(SQ);
+    const dot: Line = { a: pt(50, 50), b: pt(50, 50) };
+    expect(canFold(state, dot, 1)).toBe(false);
+    expect(canFold(state, dot, -1)).toBe(false);
+    expect(fold(state, dot, 1)).toBe(state); // same reference: exact no-op
+    // State stays fully valid (no NaN leaked into coordinates).
+    for (const layer of state.layers) {
+      for (const p of layer.poly) {
+        expect(Number.isFinite(p.x)).toBe(true);
+        expect(Number.isFinite(p.y)).toBe(true);
+      }
+    }
+  });
+
   it('is deterministic across repeated runs', () => {
     const seq: [Line, 1 | -1][] = [
       [{ a: pt(0, 0), b: pt(100, 100) }, 1],

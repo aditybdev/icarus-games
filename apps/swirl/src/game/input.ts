@@ -23,6 +23,8 @@ export function bindInput(
 ): InputState {
   const keys = new Set<string>();
   let gestureFired = false;
+  /** The one pointer that owns dispensing/steering; extra fingers are ignored. */
+  let activePointerId: number | null = null;
 
   const state: InputState = {
     pointerHeld: false,
@@ -42,6 +44,8 @@ export function bindInput(
 
   canvas.addEventListener('pointerdown', (e) => {
     fireGesture();
+    if (activePointerId !== null) return; // second finger: ignore
+    activePointerId = e.pointerId;
     state.pointerHeld = true;
     const x = toWorldX(e.clientX, e.clientY);
     if (x !== null) state.pointerTargetX = x;
@@ -50,17 +54,20 @@ export function bindInput(
   });
 
   canvas.addEventListener('pointermove', (e) => {
-    if (!state.pointerHeld) return;
+    if (!state.pointerHeld || e.pointerId !== activePointerId) return;
     const x = toWorldX(e.clientX, e.clientY);
     if (x !== null) state.pointerTargetX = x;
   });
 
   const release = (e: PointerEvent) => {
+    if (e.pointerId !== activePointerId) return;
+    activePointerId = null;
     state.pointerHeld = false;
     if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
   };
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
+  canvas.addEventListener('lostpointercapture', release);
 
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
@@ -75,6 +82,7 @@ export function bindInput(
   });
   window.addEventListener('blur', () => {
     keys.clear();
+    activePointerId = null;
     state.pointerHeld = false;
   });
 

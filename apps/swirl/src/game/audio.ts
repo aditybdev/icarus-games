@@ -27,7 +27,10 @@ export class AudioSfx {
         const data = this.noiseBuffer.getChannelData(0);
         for (let i = 0; i < length; i += 1) data[i] = (Math.random() * 2 - 1) * 0.5;
       }
-      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      if (this.ctx.state === 'suspended') {
+        // resume() can reject outside a user gesture — never let it escape.
+        void this.ctx.resume().catch(() => undefined);
+      }
     } catch {
       /* audio unavailable */
     }

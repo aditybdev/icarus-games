@@ -144,6 +144,9 @@ bindPointer(renderer.domElement, {
       grabStartY = y;
       lastRustleDist = 0;
       renderer.startGrab(x, y);
+      // The next sheet starts rising during the pull (not after the flyer
+      // leaves the screen) so fast successive rips are physically possible.
+      renderer.startPop();
       audio.rustle();
     }
   },
@@ -162,6 +165,9 @@ bindPointer(renderer.domElement, {
     const res = release(round, clock);
     if (res.accepted) {
       renderer.launchFlyer(x, y, vx, vy);
+      // Progress to 'next' immediately; the flyer visual is independent and
+      // the next sheet is already popping (started at grab time).
+      flightDone(round);
       audio.pop();
       audio.whoosh();
       if (res.tier !== 'none') {
@@ -216,7 +222,10 @@ function tick(dt: number): void {
       flightDone(round);
       renderer.startPop();
     }
-    if (ev.popped && round.phase === 'next') {
+    // State-based (not event-based) so a pop that finishes during the pull
+    // itself still flips 'next' -> 'idle', and the grabbable window matches
+    // exposedTissueRect exactly.
+    if (round.phase === 'next' && renderer.popReady) {
       nextReady(round);
     }
   } else {

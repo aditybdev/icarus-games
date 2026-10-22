@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#7ec8ff" />
+  <link rel="icon" href="data:," />
   <title>Four-Leg Frenzy</title>
   <script src="https://www.youtube.com/game_sdk/v0"></script>
   <style>
@@ -22,7 +23,7 @@
       width: 100%; height: 100%; overflow: hidden;
       font-family: "Trebuchet MS", "Comic Sans MS", "Segoe UI", system-ui, sans-serif;
       background: #7ec8ff; color: var(--ink);
-      touch-action: none; user-select: none; -webkit-user-select: none;
+      touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
       font-size: 16px;
     }
     #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
@@ -146,6 +147,11 @@
     @media (orientation: portrait) {
       #legpad { max-width: 520px; margin: 0 auto; }
       .legbtn { height: clamp(64px, 9vh, 84px); }
+    }
+    /* Short landscape phones: shrink the pad so it doesn't cover the track. */
+    @media (orientation: landscape) and (max-height: 480px) {
+      #legpad { gap: 6px; padding-top: 6px; padding-bottom: calc(6px + var(--sab)); }
+      .legbtn { height: 52px; min-height: 52px; }
     }
   </style>
 </head>

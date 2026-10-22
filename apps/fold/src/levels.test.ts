@@ -35,6 +35,17 @@ describe('level data sanity', () => {
       expect(level.target.length).toBeGreaterThanOrEqual(3);
     }
   });
+
+  it('crease ids are unique per level and every crease has nonzero length', () => {
+    for (const level of LEVELS) {
+      const ids = new Set(level.creases.map((c) => c.id));
+      expect(ids.size, `level ${level.id}: duplicate crease id`).toBe(level.creases.length);
+      for (const c of level.creases) {
+        const len = Math.hypot(c.b.x - c.a.x, c.b.y - c.a.y);
+        expect(len, `level ${level.id}: degenerate crease ${c.id}`).toBeGreaterThan(0);
+      }
+    }
+  });
 });
 
 /**

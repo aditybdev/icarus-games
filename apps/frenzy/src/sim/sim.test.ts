@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { nextRandom } from './prng';
+import { effectiveTimeMs, rankFor, scoreFor } from './rules';
 import { stepSim } from './sim';
 import {
   DT,
@@ -247,5 +248,69 @@ describe('race outcomes', () => {
     expect(s.timedOut).toBe(true);
     expect(s.finished).toBe(false);
     expect(s.timeMs + s.penaltyMs).toBeGreaterThanOrEqual(RACE_LIMIT_MS);
+  });
+
+  it('finish wins when the clock hits zero on the very same step', () => {
+    const s = createSim('race', 31);
+    s.body.x = TRACK_LENGTH - 0.02;
+    s.body.v = 5; // crosses the line within one step
+    s.timeMs = RACE_LIMIT_MS - DT * 1000; // limit is reached this exact step
+    stepSim(s, NO_INPUT);
+    expect(s.finished).toBe(true);
+    expect(s.timedOut).toBe(false);
+  });
+
+  it('a full flip at the line knocks the runner back — no finish, no best time', () => {
+    const s = createSim('race', 31);
+    s.body.x = TRACK_LENGTH - 0.02;
+    s.body.v = 5;
+    s.body.pitch = 1.5; // beyond FLIP_RAD
+    stepSim(s, NO_INPUT);
+    expect(s.finished).toBe(false);
+    expect(s.timedOut).toBe(false);
+    expect(s.body.x).toBeLessThan(TRACK_LENGTH);
+    expect(s.events.some((e) => e.type === 'fall')).toBe(true);
+  });
+
+  it('fall penalties count toward the clock and can cause a timeout', () => {
+    const s = createSim('race', 41);
+    s.timeMs = RACE_LIMIT_MS - 2000; // 88 s on the clock
+    s.penaltyMs = 2500; // effective time already past the limit next step
+    stepSim(s, NO_INPUT);
+    expect(s.timedOut).toBe(true);
+    expect(s.finished).toBe(false);
+  });
+
+  it('training mode never finishes or times out, even past 50 m and 90 s', () => {
+    const s = createSim('training', 37);
+    s.body.x = TRACK_LENGTH + 5;
+    s.timeMs = RACE_LIMIT_MS + 5000;
+    run(s, NO_INPUT, 240);
+    expect(s.finished).toBe(false);
+    expect(s.timedOut).toBe(false);
+  });
+});
+
+describe('rules', () => {
+  it('rank thresholds match the published design', () => {
+    expect(rankFor(29_999)).toBe('S');
+    expect(rankFor(30_000)).toBe('S');
+    expect(rankFor(30_001)).toBe('A');
+    expect(rankFor(45_000)).toBe('A');
+    expect(rankFor(45_001)).toBe('B');
+    expect(rankFor(65_000)).toBe('B');
+    expect(rankFor(65_001)).toBe('C');
+  });
+
+  it('effective time includes fall penalties', () => {
+    expect(effectiveTimeMs(10_000, 3_000)).toBe(13_000);
+    expect(effectiveTimeMs(10_000, 0)).toBe(10_000);
+  });
+
+  it('score rewards faster finishes and longer DNFs, never negative', () => {
+    expect(scoreFor(true, 30_000, TRACK_LENGTH)).toBeGreaterThan(scoreFor(true, 60_000, TRACK_LENGTH));
+    expect(scoreFor(false, RACE_LIMIT_MS, 25)).toBe(500);
+    expect(scoreFor(false, RACE_LIMIT_MS, 0)).toBe(0);
+    expect(scoreFor(true, 0, TRACK_LENGTH)).toBeGreaterThan(0); // degenerate clock guard
   });
 });

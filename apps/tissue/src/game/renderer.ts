@@ -122,6 +122,7 @@ export class Renderer {
   private bgGradient: CanvasGradient | null = null;
   private bubbles: Bubble[] = [];
   private sparkles: Sparkle[] = [];
+  private readonly safeProbe: HTMLElement;
 
   private ribbon: Ribbon | null = null;
   private grabX = 0;
@@ -148,6 +149,7 @@ export class Renderer {
       'position:fixed;visibility:hidden;pointer-events:none;' +
       'padding-bottom:env(safe-area-inset-bottom,0px)';
     document.body.appendChild(probe);
+    this.safeProbe = probe;
     this.safeBottom = parseFloat(getComputedStyle(probe).paddingBottom) || 0;
 
     const rand = mulberry32(20240521);
@@ -180,6 +182,8 @@ export class Renderer {
 
   resize(): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // Safe-area insets can change with orientation, so re-read on resize.
+    this.safeBottom = parseFloat(getComputedStyle(this.safeProbe).paddingBottom) || 0;
     this.w = window.innerWidth;
     this.h = window.innerHeight;
     this.canvas.width = Math.round(this.w * dpr);
@@ -214,9 +218,18 @@ export class Renderer {
 
   /* ----------------------------- interaction ----------------------------- */
 
+  /**
+   * True once the pop-up bounce is far enough along that the sheet is
+   * grabbable. Matches the gate in exposedTissueRect so a tap that lands on
+   * the visible sheet always connects.
+   */
+  get popReady(): boolean {
+    return this.popT >= 0.7;
+  }
+
   /** Grabbable region of the currently exposed sheet (CSS px), or null. */
   exposedTissueRect(): Rect | null {
-    if (this.popT < 0.7 || this.ribbon) return null;
+    if (!this.popReady || this.ribbon) return null;
     const L = this.layout;
     const scale = easeOutBack(clamp(this.popT, 0, 1));
     const h = L.sheetH * Math.max(0, scale);
@@ -242,10 +255,15 @@ export class Renderer {
     this.grabY = y;
   }
 
-  /** Short pull: discard the ribbon and squash the sheet back into place. */
+  /**
+   * Short pull: discard the ribbon and squash the sheet back into place.
+   * The pop of the next sheet started at grab time, so restoring popT keeps
+   * the current sheet fully exposed and instantly re-grabbable.
+   */
   snapBack(): void {
     this.ribbon = null;
     this.snapT = 1;
+    this.popT = 1;
   }
 
   /** Successful rip: fling the sheet off with the release velocity. */
@@ -381,11 +399,11 @@ export class Renderer {
     this.drawBubbles(time);
 
     const phase = round?.phase ?? 'idle';
-    const holdingSheet = phase === 'grabbing' || phase === 'pulling';
     const boxEmpty = phase === 'finished' || phase === 'flying';
 
-    // Sheet behind the box front so it looks tucked into the slot.
-    if (!holdingSheet && !boxEmpty && this.popT > 0.01) {
+    // Sheet behind the box front so it looks tucked into the slot. While a
+    // pull is held, this is the NEXT sheet rising to replace the ribbon.
+    if (!boxEmpty && this.popT > 0.01) {
       this.drawIdleSheet(time);
     }
     this.drawBox(round, time);

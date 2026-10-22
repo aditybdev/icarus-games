@@ -19,10 +19,12 @@
 import {
   AREA_EPS,
   BBox,
+  EPS,
   Line,
   Pt,
   bboxOf,
   clipHalfPlane,
+  lineLength,
   pointInPolygon,
   polygonArea,
   reflectPoint,
@@ -88,6 +90,7 @@ export function splitLayers(state: PaperState, line: Line, side: 1 | -1): SplitR
 
 /** A fold is only meaningful when there is paper on the moving side. */
 export function canFold(state: PaperState, line: Line, side: 1 | -1): boolean {
+  if (lineLength(line) <= EPS) return false; // degenerate crease: no fold line
   return splitLayers(state, line, side).movedArea > 1e-6;
 }
 
@@ -96,6 +99,7 @@ export function canFold(state: PaperState, line: Line, side: 1 | -1): boolean {
  * moving side the input state is returned unchanged (invalid fold = no-op).
  */
 export function fold(state: PaperState, line: Line, side: 1 | -1): PaperState {
+  if (lineLength(line) <= EPS) return state; // degenerate crease: safe no-op
   const { kept, moved, movedArea } = splitLayers(state, line, side);
   if (movedArea <= 1e-6) return state;
   const flipped: Layer[] = moved.map((l) => ({

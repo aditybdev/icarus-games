@@ -46,7 +46,9 @@ export class AudioFx {
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
-      void this.ctx.resume();
+      // resume() can reject on some hosts; never let it surface as an
+      // unhandled rejection (which our own error hook would log).
+      void this.ctx.resume().catch(() => undefined);
     }
   }
 
