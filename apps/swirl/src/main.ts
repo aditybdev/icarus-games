@@ -82,7 +82,7 @@ import { setReducedMotion, UI, type Mode } from './ui/ui';
 type GameState = 'title' | 'orderCard' | 'playing' | 'toppling' | 'between' | 'results';
 
 const platform = createPlatform('swirl');
-const audio = new AudioSfx();
+const audio = new AudioSfx(platform);
 
 // Register error reporters before any fallible setup (renderer creation etc.).
 installErrorHooks(platform, 'swirl');
@@ -164,10 +164,7 @@ const world = new World(document.getElementById('stage') as HTMLElement);
 const input: InputState = bindInput(
   world.renderer.domElement,
   (x, y) => world.pointerToWorldX(x, y),
-  () => {
-    audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
-  },
+  () => audio.unlock(),
 );
 
 /* ------------------------------- helpers ------------------------------- */
@@ -476,7 +473,7 @@ function pauseGame(): void {
   dispensing = false;
   audio.stopDispense();
   audio.setTension(0);
-  audio.setEnabled(false);
+  audio.setPaused(true);
   world.setShake(0);
   ui.setPaused(true);
 }
@@ -484,7 +481,7 @@ function pauseGame(): void {
 function resumeGame(): void {
   if (!paused) return;
   paused = false;
-  audio.setEnabled(platform.isAudioEnabled() && sfxOn);
+  audio.setPaused(false);
   ui.setPaused(false);
   last = performance.now();
   rafId = requestAnimationFrame(loop);
@@ -686,6 +683,24 @@ function loop(now: number): void {
   }
 }
 
+/** First-launch tutorial overlay, replayable from the title screen. */
+function bindTutorial(): void {
+  const overlay = document.getElementById('screen-tutorial')!;
+  document.getElementById('btn-howto')!.addEventListener('click', () => {
+    audio.unlock();
+    audio.click();
+    overlay.hidden = false;
+  });
+  document.getElementById('btn-tutorial-got')!.addEventListener('click', () => {
+    audio.click();
+    overlay.hidden = true;
+    if (save.seenTutorial !== true) {
+      save = { ...save, seenTutorial: true };
+      void platform.save(save);
+    }
+  });
+}
+
 /* --------------------------------- boot --------------------------------- */
 
 // Tap-to-skip fast paths: order-intro card, topple settle, inter-order beat.
@@ -707,7 +722,6 @@ window.addEventListener('pointerdown', (e) => {
 const ui = new UI({
   onMode(m) {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     audio.click();
     // Leaving the pause overlay via any path must restart the render loop.
     manualPaused = false;
@@ -788,7 +802,7 @@ function bindSettings(): void {
   sfxBox.addEventListener('change', () => {
     save = { ...save, sfx: sfxBox.checked };
     sfxOn = sfxBox.checked;
-    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
+    audio.setSfx(sfxOn);
     profile.settings.sfx = sfxOn;
     saveSharedProfile(profile);
     void platform.save(save);
@@ -823,22 +837,24 @@ async function boot(): Promise<void> {
     save.reducedMotion = profile.settings.reducedMotion || OS_REDUCED_MOTION;
   }
   sfxOn = save.sfx !== false;
+  audio.setSfx(sfxOn);
   userReducedMotion = save.reducedMotion === true;
   setReducedMotion(motionReduced());
   setHapticsEnabled(save.haptics !== false);
   recordPlay(profile, 'swirl', masteryFor(save));
   saveSharedProfile(profile);
   bindSettings();
+  bindTutorial();
   goToTitle();
+  if (save.seenTutorial !== true) {
+    document.getElementById('screen-tutorial')!.hidden = false;
+  }
   window.addEventListener('resize', () => world.resize());
   platform.bindLifecycle({
     pause: pauseGame,
     resume: resumeGame,
     // A host/visibility resume must not dismiss a pause the user chose.
     isManualPause: () => manualPaused,
-  });
-  platform.onAudioEnabledChange((enabled) => {
-    audio.setEnabled(enabled && sfxOn && !paused);
   });
   rafId = requestAnimationFrame(loop);
 }

@@ -20,6 +20,8 @@ export interface SaveData {
   sfx?: boolean;
   /** User haptics toggle; undefined = on. */
   haptics?: boolean;
+  /** First-launch tutorial has been seen (undefined/false = show it). */
+  seenTutorial?: boolean;
   dailyLast: string;
   dailyStreak: number;
   dailyBestMs: number | null;
@@ -53,6 +55,7 @@ export function normalizeSave(raw: unknown, todayKey?: string): SaveData {
   if (typeof data.reducedMotion === 'boolean') save.reducedMotion = data.reducedMotion;
   if (typeof data.sfx === 'boolean') save.sfx = data.sfx;
   if (typeof data.haptics === 'boolean') save.haptics = data.haptics;
+  if (typeof data.seenTutorial === 'boolean') save.seenTutorial = data.seenTutorial;
 
   save.dailyLast = typeof data.dailyLast === 'string' ? data.dailyLast : '';
   save.dailyStreak =

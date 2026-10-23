@@ -66,7 +66,7 @@ const platform = createPlatform('tissue');
 // Error hooks must precede any fallible construction (renderer below) so a
 // constructor throw is still reported to the host health channel.
 installErrorHooks(platform, 'tissue');
-const audio = new AudioSfx();
+const audio = new AudioSfx(platform);
 const renderer = new Renderer(document.getElementById('stage') as HTMLElement);
 
 // Reduced-motion starts from the OS preference; the settings toggle overrides.
@@ -245,14 +245,14 @@ function pauseGame(): void {
   if (appState !== 'playing' && appState !== 'countdown') return;
   paused = true;
   cancelGrab();
-  audio.setEnabled(false);
+  audio.setPaused(true);
   ui.setPaused(true);
 }
 
 function resumeGame(): void {
   if (!paused) return;
   paused = false;
-  audio.setEnabled(platform.isAudioEnabled() && sfxOn);
+  audio.setPaused(false);
   ui.setPaused(false);
   last = performance.now();
 }
@@ -274,7 +274,6 @@ function cancelGrab(): void {
 bindPointer(renderer.domElement, {
   onDown(x, y) {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     if (paused || appState !== 'playing' || !round) return;
     const rect = renderer.exposedTissueRect();
     if (!rect) return;
@@ -448,19 +447,16 @@ function loop(now: number): void {
 const ui = new UI({
   onPlay(size) {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     audio.click();
     startRound(size, { mode: 'time' });
   },
   onBlitz() {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     audio.click();
     startRound(BLITZ_SIZE, { mode: 'blitz' });
   },
   onDaily() {
     audio.unlock();
-    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
     audio.click();
     // Daily Sprint: a 25-tissue timed round flagged as the Icarus Daily.
     startRound(25, { mode: 'daily' });
@@ -476,7 +472,7 @@ const ui = new UI({
     if (paused) {
       paused = false;
       manualPaused = false;
-      audio.setEnabled(platform.isAudioEnabled() && sfxOn);
+      audio.setPaused(false);
       ui.setPaused(false);
     }
     goToMenu();
@@ -496,7 +492,7 @@ const ui = new UI({
     if (paused) {
       paused = false;
       manualPaused = false;
-      audio.setEnabled(platform.isAudioEnabled() && sfxOn);
+      audio.setPaused(false);
       ui.setPaused(false);
       last = performance.now();
     }
@@ -520,6 +516,24 @@ function mirrorMastery(): void {
   saveSharedProfile(profile);
 }
 
+/** First-launch tutorial overlay, replayable from the menu. */
+function bindTutorial(): void {
+  const overlay = document.getElementById('screen-tutorial')!;
+  document.getElementById('btn-howto')!.addEventListener('click', () => {
+    audio.unlock();
+    audio.click();
+    overlay.hidden = false;
+  });
+  document.getElementById('btn-tutorial-got')!.addEventListener('click', () => {
+    audio.click();
+    overlay.hidden = true;
+    if (save.seenTutorial !== true) {
+      save = { ...save, seenTutorial: true };
+      void platform.save(save);
+    }
+  });
+}
+
 /** Settings overlay: three toggles mirrored into the save and the profile. */
 function bindSettings(): void {
   const overlay = document.getElementById('screen-settings')!;
@@ -541,7 +555,7 @@ function bindSettings(): void {
   sfxBox.addEventListener('change', () => {
     save = { ...save, sfx: sfxBox.checked };
     sfxOn = sfxBox.checked;
-    audio.setEnabled(platform.isAudioEnabled() && sfxOn && !paused);
+    audio.setSfx(sfxOn);
     profile.settings.sfx = sfxOn;
     saveSharedProfile(profile);
     void platform.save(save);
@@ -577,6 +591,7 @@ async function boot(): Promise<void> {
     save.reducedMotion = profile.settings.reducedMotion || reducedMotion;
   }
   sfxOn = save.sfx !== false;
+  audio.setSfx(sfxOn);
   reducedMotion = save.reducedMotion === true;
   renderer.setReducedMotion(reducedMotion);
   document.body.classList.toggle('reduced-motion', reducedMotion);
@@ -584,16 +599,17 @@ async function boot(): Promise<void> {
   recordPlay(profile, 'tissue', masteryFor(save));
   saveSharedProfile(profile);
   bindSettings();
+  bindTutorial();
   goToMenu();
+  if (save.seenTutorial !== true) {
+    document.getElementById('screen-tutorial')!.hidden = false;
+  }
   window.addEventListener('resize', () => renderer.resize());
   platform.bindLifecycle({
     pause: pauseGame,
     resume: resumeGame,
     // A host/visibility resume must not dismiss a pause the user chose.
     isManualPause: () => manualPaused,
-  });
-  platform.onAudioEnabledChange((enabled) => {
-    audio.setEnabled(enabled && sfxOn && !paused);
   });
   cancelAnimationFrame(rafId);
   last = performance.now();

@@ -257,6 +257,19 @@
         color: #b08a72;
       }
 
+      .howto-list {
+        margin: 0;
+        padding-left: 1.3em;
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.45;
+        color: #5a3a22;
+      }
+
       .howto {
         margin: 4px 0 0;
         font-size: 14px;
@@ -704,8 +717,21 @@
         <button id="btn-daily" class="btn btn-daily btn-big" type="button">Daily Rush</button>
         <p id="daily-line" class="daily-line"></p>
         <p id="score-line" class="daily-line"></p>
+        <button id="btn-howto" class="btn btn-big" type="button">How to play</button>
         <button id="btn-settings" class="btn btn-settings" type="button" aria-label="Settings">⚙</button>
         <p class="howto">Hold to dispense · drag to steer · stay centered or it topples!</p>
+      </div>
+    </div>
+
+    <div id="screen-tutorial" class="screen" hidden>
+      <div class="card">
+        <h2 style="margin:0;font-size:30px;font-weight:900;">How to play</h2>
+        <ul class="howto-list">
+          <li>Hold anywhere to dispense soft-serve.</li>
+          <li>Drag to steer the stream and keep the stack centered.</li>
+          <li>Release to serve — tall, neat swirls earn more stars. Wobble means danger!</li>
+        </ul>
+        <button id="btn-tutorial-got" class="btn btn-big" type="button">Got it</button>
       </div>
     </div>
 

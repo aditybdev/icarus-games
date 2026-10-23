@@ -186,7 +186,9 @@ export class Game {
     recordPlay(this.profile, 'fold', masteryFor(this.save));
     saveSharedProfile(this.profile);
     this.bindSettings();
+    this.bindTutorial();
     this.showTitle();
+    if (this.save.seenTutorial !== true) this.showTutorial();
     this.bindInput();
     this.bindResize();
     this.resize();
@@ -206,6 +208,28 @@ export class Game {
     if (!entry) return;
     entry.mastery = Math.max(entry.mastery, masteryFor(this.save));
     saveSharedProfile(this.profile);
+  }
+
+  /** First-launch tutorial overlay, replayable from the title screen. */
+  private bindTutorial(): void {
+    const overlay = document.getElementById('screen-tutorial')!;
+    document.getElementById('btn-howto')!.addEventListener('click', () => {
+      this.audio.unlock();
+      this.audio.click();
+      this.showTutorial();
+    });
+    document.getElementById('btn-tutorial-got')!.addEventListener('click', () => {
+      this.audio.click();
+      overlay.hidden = true;
+      if (this.save.seenTutorial !== true) {
+        this.save.seenTutorial = true;
+        void this.platform.save(this.save);
+      }
+    });
+  }
+
+  private showTutorial(): void {
+    document.getElementById('screen-tutorial')!.hidden = false;
   }
 
   /** Settings overlay: three toggles mirrored into the save and the profile. */

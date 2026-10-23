@@ -48,6 +48,8 @@ export interface SaveData {
   sfx?: boolean;
   haptics?: boolean;
   reducedMotion?: boolean;
+  /** First-launch tutorial has been seen (undefined/false = show it). */
+  seenTutorial?: boolean;
 }
 
 export const SAVE_VERSION = 1;
@@ -94,6 +96,7 @@ export function normalizeSave(raw: unknown, levelCount: number, todayKey?: strin
   if (typeof obj.sfx === 'boolean') save.sfx = obj.sfx;
   if (typeof obj.haptics === 'boolean') save.haptics = obj.haptics;
   if (typeof obj.reducedMotion === 'boolean') save.reducedMotion = obj.reducedMotion;
+  if (typeof obj.seenTutorial === 'boolean') save.seenTutorial = obj.seenTutorial;
   return save;
 }
 

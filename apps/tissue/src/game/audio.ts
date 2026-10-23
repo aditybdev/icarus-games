@@ -1,17 +1,33 @@
 /**
  * All sound is synthesized with WebAudio — no audio assets.
- * The context is created lazily on the first user gesture; output is muted
- * whenever the platform disables audio or the game is paused.
+ * The context is created lazily on the first user gesture. The master gain is
+ * gated INSIDE this class (host audio state × SFX toggle × pause) so callers
+ * can never desync the composite flag. Nothing is ever scheduled on a
+ * suspended context — queued nodes would burst-fire when it resumed.
  */
+import type { Platform } from '@icarus/platform';
+
 export class AudioSfx {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private noiseBuffer: AudioBuffer | null = null;
-  private enabled = true;
+  private hostEnabled = true;
+  private sfxOn = true;
+  private paused = false;
+  /** Rustle fires per pointermove — cap the rate or it turns to static. */
+  private lastRustleMs = 0;
   /** Fever bed: pad oscillators + hat scheduler while a streak runs hot. */
   private feverOn = false;
   private feverPad: { osc: OscillatorNode[]; gain: GainNode } | null = null;
   private feverTimer: ReturnType<typeof setInterval> | null = null;
+
+  constructor(platform: Platform) {
+    this.hostEnabled = platform.isAudioEnabled();
+    platform.onAudioEnabledChange((enabled) => {
+      this.hostEnabled = enabled;
+      this.applyGain();
+    });
+  }
 
   /** Create/resume the AudioContext. Call from a user-gesture handler. */
   unlock(): void {
@@ -23,12 +39,13 @@ export class AudioSfx {
         if (!Ctor) return;
         this.ctx = new Ctor();
         this.master = this.ctx.createGain();
-        this.master.gain.value = this.enabled ? 0.5 : 0;
+        this.master.gain.value = 0;
         this.master.connect(this.ctx.destination);
         const length = this.ctx.sampleRate;
         this.noiseBuffer = this.ctx.createBuffer(1, length, this.ctx.sampleRate);
         const data = this.noiseBuffer.getChannelData(0);
         for (let i = 0; i < length; i += 1) data[i] = (Math.random() * 2 - 1) * 0.5;
+        this.applyGain();
       }
       // .catch matters: a rejected resume() escapes the surrounding try as an
       // unhandled rejection and trips the error hooks.
@@ -39,11 +56,28 @@ export class AudioSfx {
     }
   }
 
-  setEnabled(enabled: boolean): void {
-    this.enabled = enabled;
-    if (this.master && this.ctx) {
-      this.master.gain.setTargetAtTime(enabled ? 0.5 : 0, this.ctx.currentTime, 0.02);
-    }
+  setSfx(on: boolean): void {
+    this.sfxOn = on;
+    this.applyGain();
+  }
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    this.applyGain();
+  }
+
+  private gateOpen(): boolean {
+    return this.hostEnabled && this.sfxOn && !this.paused;
+  }
+
+  private applyGain(): void {
+    if (!this.master || !this.ctx) return;
+    this.master.gain.setTargetAtTime(this.gateOpen() ? 0.5 : 0, this.ctx.currentTime, 0.02);
+  }
+
+  /** Never schedule on a suspended context — it burst-fires on resume. */
+  private get running(): boolean {
+    return !!this.ctx && !!this.master && this.ctx.state === 'running';
   }
 
   private tone(
@@ -54,18 +88,20 @@ export class AudioSfx {
     volume: number,
     delay = 0,
   ): void {
-    if (!this.ctx || !this.master) return;
+    if (!this.running) return;
+    const ctx = this.ctx!;
+    const master = this.master!;
     try {
-      const t0 = this.ctx.currentTime + delay;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      const t0 = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = type;
       osc.frequency.setValueAtTime(freqStart, t0);
       osc.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), t0 + duration);
       gain.gain.setValueAtTime(0, t0);
       gain.gain.linearRampToValueAtTime(volume, t0 + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
-      osc.connect(gain).connect(this.master);
+      osc.connect(gain).connect(master);
       osc.start(t0);
       osc.stop(t0 + duration + 0.05);
     } catch {
@@ -81,22 +117,24 @@ export class AudioSfx {
     volume: number,
     delay = 0,
   ): void {
-    if (!this.ctx || !this.master || !this.noiseBuffer) return;
+    if (!this.running || !this.noiseBuffer) return;
+    const ctx = this.ctx!;
+    const master = this.master!;
     try {
-      const t0 = this.ctx.currentTime + delay;
-      const src = this.ctx.createBufferSource();
+      const t0 = ctx.currentTime + delay;
+      const src = ctx.createBufferSource();
       src.buffer = this.noiseBuffer;
       // Random start offset so repeated rustles do not sound identical.
       src.loop = true;
-      const filter = this.ctx.createBiquadFilter();
+      const filter = ctx.createBiquadFilter();
       filter.type = filterType;
       filter.frequency.setValueAtTime(freqStart, t0);
       filter.frequency.exponentialRampToValueAtTime(Math.max(40, freqEnd), t0 + duration);
-      const gain = this.ctx.createGain();
+      const gain = ctx.createGain();
       gain.gain.setValueAtTime(0, t0);
       gain.gain.linearRampToValueAtTime(volume, t0 + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
-      src.connect(filter).connect(gain).connect(this.master);
+      src.connect(filter).connect(gain).connect(master);
       src.start(t0, Math.random());
       src.stop(t0 + duration + 0.05);
     } catch {
@@ -111,6 +149,10 @@ export class AudioSfx {
 
   /** Paper rustle while dragging a tissue upward. Pitch scales with streak heat. */
   rustle(pitch = 1): void {
+    // Fires per pointermove; unthrottled bursts stack into white-noise static.
+    const now = performance.now();
+    if (now - this.lastRustleMs < 50) return;
+    this.lastRustleMs = now;
     this.noise(0.06, 'bandpass', 1900 * pitch, 2600 * pitch, 0.22);
   }
 
@@ -175,27 +217,31 @@ export class AudioSfx {
   }
 
   private startFeverBed(): void {
-    if (!this.ctx || !this.master || this.feverPad) return;
+    if (!this.running || this.feverPad) return;
+    const ctx = this.ctx!;
+    const master = this.master!;
     try {
-      const t0 = this.ctx.currentTime;
-      const gain = this.ctx.createGain();
+      const t0 = ctx.currentTime;
+      const gain = ctx.createGain();
       gain.gain.setValueAtTime(0, t0);
       gain.gain.linearRampToValueAtTime(0.05, t0 + 0.9); // slow fade-in
-      const filter = this.ctx.createBiquadFilter();
+      const filter = ctx.createBiquadFilter();
       filter.type = 'lowpass';
       filter.frequency.value = 900;
       const osc = [196, 246.94].map((freq, i) => {
-        const o = this.ctx!.createOscillator();
+        const o = ctx.createOscillator();
         o.type = 'sine';
         o.frequency.value = freq * (i === 0 ? 1 : 1.003); // gentle detune shimmer
         o.connect(filter);
         o.start(t0);
         return o;
       });
-      filter.connect(gain).connect(this.master);
+      filter.connect(gain).connect(master);
       this.feverPad = { osc, gain };
       this.feverTimer = setInterval(() => {
-        // Eighth-note hats at 120 bpm; volume follows the master gain.
+        // Eighth-note hats at 120 bpm. Skip while muted — audible silence is
+        // free, but scheduling nodes forever while paused is not.
+        if (!this.gateOpen()) return;
         this.noise(0.03, 'highpass', 7000, 7000, 0.045);
       }, 250);
     } catch {

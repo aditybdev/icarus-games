@@ -138,6 +138,7 @@ export class Game {
     this.applySettingsToUi();
     this.updateBestLine();
     this.showTitle();
+    if (this.save.seenTutorial !== true) $('screen-tutorial').classList.remove('hidden');
 
     this.lastT = performance.now();
     const loop = (t: number): void => {
@@ -175,6 +176,14 @@ export class Game {
     click('btn-settings', () => this.openSettings());
     click('btn-pause-settings', () => this.openSettings());
     click('btn-settings-close', () => this.closeSettings());
+    click('btn-howto', () => $('screen-tutorial').classList.remove('hidden'));
+    click('btn-tutorial-got', () => {
+      $('screen-tutorial').classList.add('hidden');
+      if (this.save.seenTutorial !== true) {
+        this.save.seenTutorial = true;
+        void this.platform.save(this.save);
+      }
+    });
 
     $('set-motion').addEventListener('change', (e) => {
       this.save.reducedMotion = (e.target as HTMLInputElement).checked;

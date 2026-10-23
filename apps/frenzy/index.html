@@ -81,6 +81,13 @@
       background: rgba(255,247,230,.92); border-radius: 14px; padding: 10px 16px;
       box-shadow: 0 3px 8px rgba(0,0,0,.2);
     }
+    /* ---------- tutorial ---------- */
+    .howto-list {
+      margin: 0; padding-left: 1.3em; text-align: left;
+      display: flex; flex-direction: column; gap: 10px;
+      font-size: 1rem; font-weight: 600; line-height: 1.45; color: var(--ink);
+    }
+
     #btn-settings {
       position: fixed; top: calc(10px + var(--sat)); right: calc(10px + var(--sar));
       width: 52px; height: 52px; min-width: 0; border-radius: 14px; z-index: 40;
@@ -265,7 +272,20 @@
     <div id="daily-line"></div>
     <div id="score-line"></div>
     <button class="btn secondary" id="btn-train">Training</button>
+    <button class="btn secondary" id="btn-howto">How to play</button>
     <div class="howto">Hold a leg to swing it forward, release to stomp. Alternate diagonals — FL+BR then FR+BL — for maximum wobble-speed!</div>
+  </div>
+
+  <div id="screen-tutorial" class="screen overlay hidden">
+    <div class="panel">
+      <h2>How to play</h2>
+      <ul class="howto-list">
+        <li>Each of the four pads controls one leg.</li>
+        <li>Hold a pad to swing the leg forward, release to stomp it down.</li>
+        <li>Alternate diagonals — FL+BR then FR+BL — to waddle all 50 m.</li>
+      </ul>
+      <button class="btn" id="btn-tutorial-got">Got it</button>
+    </div>
   </div>
   <button class="btn secondary hidden" id="btn-settings" aria-label="Settings">
     <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.01a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>

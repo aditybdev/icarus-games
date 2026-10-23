@@ -408,6 +408,19 @@
         color: var(--ink-soft, #8a94a6);
       }
 
+      .howto-list {
+        margin: 0;
+        padding-left: 1.3em;
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        font-size: 16px;
+        font-weight: 600;
+        line-height: 1.45;
+        color: var(--ink, #2b3245);
+      }
+
       .howto {
         margin: 2px 0 0;
         font-size: 14px;
@@ -762,11 +775,24 @@
         <div id="skin-row" aria-label="Box skins"></div>
         <p id="menu-stats" hidden></p>
         <p id="score-line" hidden></p>
+        <button id="btn-howto" class="btn btn-big" type="button">How to play</button>
         <button id="btn-settings" class="btn btn-settings" type="button" aria-label="Settings">⚙</button>
         <p class="howto">
           Grab the tissue and swipe UP. Let go past the stretch point to rip it
           free — too short and it snaps back! Every 20th tissue is golden.
         </p>
+      </div>
+    </div>
+
+    <div id="screen-tutorial" class="screen" hidden>
+      <div class="card">
+        <h2 class="pause-title">How to play</h2>
+        <ul class="howto-list">
+          <li>Press the exposed tissue and drag UP fast.</li>
+          <li>Release past the stretch point to pop it free — short pulls snap back.</li>
+          <li>Fast chains build fever for bonus points. Golden tissues are worth extra!</li>
+        </ul>
+        <button id="btn-tutorial-got" class="btn btn-big" type="button">Got it</button>
       </div>
     </div>
 
