@@ -7,7 +7,25 @@
       content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
     <meta name="theme-color" content="#14171f" />
-    <link rel="icon" href="data:," />
+    <meta
+      name="description"
+      content="Icarus Games — four original casual games you can play instantly in your browser: Fold, Swirl!, Four-Leg Frenzy and Tissue Rush. No installs, no sign-ups."
+    />
+    <meta property="og:title" content="Icarus Games" />
+    <meta
+      property="og:description"
+      content="Four original casual games — play instantly in your browser. No installs, no sign-ups."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://aditybdev.github.io/icarus-games/" />
+    <meta
+      property="og:image"
+      content="https://aditybdev.github.io/icarus-games/shots/hub.jpg"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3 L28 27 L16 21 L4 27 Z' fill='%23ffb347'/%3E%3C/svg%3E"
+    />
     <title>Icarus Games</title>
     <style>
       * {
@@ -52,16 +70,17 @@
       }
       .grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 16px;
-        width: min(960px, 100%);
+        width: min(1080px, 100%);
       }
       a.card {
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        padding: 22px 20px;
+        gap: 10px;
+        padding: 0 0 18px;
         border-radius: 18px;
+        overflow: hidden;
         background: #1d2230;
         border: 1px solid #2c3347;
         color: inherit;
@@ -80,6 +99,18 @@
       a.card:active {
         transform: translateY(-1px) scale(0.99);
       }
+      a.card img {
+        display: block;
+        width: 100%;
+        height: 180px;
+        object-fit: cover;
+        object-position: top;
+        background: #232a3d;
+      }
+      .name,
+      .pitch {
+        padding: 0 18px;
+      }
       .name {
         font-size: 1.25rem;
         font-weight: 800;
@@ -88,6 +119,10 @@
         color: #9aa3b8;
         font-size: 0.92rem;
         line-height: 1.45;
+      }
+      a.card.fold img {
+        /* the Fold menu logo sits below a tall empty top band — crop to it */
+        object-position: 50% 35%;
       }
       .swirl .name { color: #ff9ecb; }
       .fold .name { color: #e8b08a; }
@@ -106,25 +141,53 @@
   </head>
   <body>
     <h1>Icarus <span>Games</span></h1>
-    <p class="tagline">Four tiny games, made with care.</p>
+    <p class="tagline">Four original games. Play instantly — no installs, no sign-ups.</p>
     <div class="grid">
       <a class="card swirl" href="./swirl/">
+        <img
+          src="./shots/swirl.jpg"
+          alt="Swirl! main menu — a bubble-tea pouring game"
+          width="460"
+          height="996"
+          loading="lazy"
+        />
         <span class="name">Swirl!</span>
         <span class="pitch">Hold to dispense, drag to steer — stack the tallest, neatest soft-serve.</span>
       </a>
       <a class="card fold" href="./fold/">
+        <img
+          src="./shots/fold.jpg"
+          alt="Fold main menu — an origami puzzle game"
+          width="460"
+          height="996"
+          loading="lazy"
+        />
         <span class="name">Fold</span>
         <span class="pitch">A calm origami puzzle. Tap a line, fold the paper, match the silhouette.</span>
       </a>
       <a class="card frenzy" href="./frenzy/">
+        <img
+          src="./shots/frenzy.jpg"
+          alt="Four-Leg Frenzy main menu — a wobbly physics racing game"
+          width="460"
+          height="996"
+          loading="lazy"
+        />
         <span class="name">Four-Leg Frenzy</span>
         <span class="pitch">Four legs, zero coordination. Waddle a derpy pup across 50 metres.</span>
       </a>
       <a class="card tissue" href="./tissue/">
+        <img
+          src="./shots/tissue.jpg"
+          alt="Tissue Rush main menu — a tissue-pulling timing game"
+          width="460"
+          height="996"
+          loading="lazy"
+        />
         <span class="name">Tissue Rush</span>
         <span class="pitch">Grab, pull, pop. Empty the box as fast as you can — chains build fever.</span>
       </a>
     </div>
-    <footer>Each game saves progress locally and works offline.</footer>
+    <footer>Progress saves on this device — pick up right where you left off.</footer>
   </body>
 </html>

@@ -34,6 +34,7 @@ jobs:
         run: |
           mkdir -p public
           cp pages/index.html public/index.html
+          cp -r pages/shots public/shots
           for g in fold swirl frenzy tissue; do
             mkdir -p "public/$g"
             cp -r "apps/$g/dist/." "public/$g/"
