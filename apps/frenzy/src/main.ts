@@ -18,11 +18,13 @@ platform.bindLifecycle({
   isManualPause: () => game.isManualPause,
 });
 
-game.init().catch((err) => platform.reportError('frenzy', err));
-
-// signal readiness after the first frame has been painted
-requestAnimationFrame(() => {
-  requestAnimationFrame(() => {
-    void platform.ready();
-  });
-});
+// gameReady must fire only once the UI is interactable — after init has
+// loaded the save and built the title screen, and a frame has painted.
+void game
+  .init()
+  .then(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => void platform.ready());
+    });
+  })
+  .catch((err) => platform.reportError('frenzy', err));

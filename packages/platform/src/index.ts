@@ -13,18 +13,21 @@ export interface YtGameSdk {
     gameReady?: () => void;
     loadData?: () => Promise<string | null | undefined>;
     saveData?: (data: string) => Promise<void> | void;
-    onPause?: (cb: () => void) => void;
-    onResume?: (cb: () => void) => void;
   };
   engagement?: {
     sendScore?: (score: { value: number }) => void;
   };
   health?: {
-    reportError?: (err: { errorType: string; errorMessage: string }) => void;
+    /** Host health channel — takes no parameters (host infers context). */
+    logError?: () => void;
+    logWarning?: () => void;
   };
   system?: {
+    getLanguage?: () => Promise<string>;
     isAudioEnabled?: () => boolean;
     onAudioEnabledChange?: (cb: (enabled: boolean) => void) => void;
+    onPause?: (cb: () => void) => void;
+    onResume?: (cb: () => void) => void;
   };
 }
 
@@ -147,8 +150,8 @@ export class Platform {
     const yt = typeof window !== 'undefined' ? window.ytgame : undefined;
     if (yt?.IN_PLAYABLES_ENV) {
       try {
-        yt.game?.onPause?.(safePause);
-        yt.game?.onResume?.(safeResume);
+        yt.system?.onPause?.(safePause);
+        yt.system?.onResume?.(safeResume);
       } catch (error) {
         console.warn('[platform] lifecycle binding failed', error);
       }
@@ -181,7 +184,8 @@ export class Platform {
   reportError(errorType: string, error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
     try {
-      window.ytgame?.health?.reportError?.({ errorType, errorMessage: message });
+      // The host health API takes no parameters — it infers context itself.
+      window.ytgame?.health?.logError?.();
     } catch {
       /* unsupported host */
     }

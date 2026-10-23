@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  Platform,
+  createPlatform,
   dailyDoneToday,
   dailyKeyUTC,
   dateSeedUTC,
@@ -252,5 +254,129 @@ describe('siblingForDay', () => {
         expect(siblingForDay(id, seed)).toEqual(s);
       }
     }
+  });
+});
+
+/* --------------------------------------------------------------------------
+ * Platform adapter against a mocked ytgame SDK. These pin the exact host API
+ * surface certification checks: system.onPause/onResume (NOT game.*),
+ * health.logError() with no parameters, firstFrameReady before gameReady.
+ * ------------------------------------------------------------------------ */
+
+interface MockYt {
+  calls: string[];
+  pauseCb: (() => void) | null;
+  resumeCb: (() => void) | null;
+  stored: string;
+  ytgame: Record<string, unknown>;
+}
+
+function mockHost(): MockYt {
+  const m: MockYt = { calls: [], pauseCb: null, resumeCb: null, stored: '', ytgame: {} };
+  m.ytgame = {
+    IN_PLAYABLES_ENV: true,
+    game: {
+      firstFrameReady: () => m.calls.push('firstFrameReady'),
+      gameReady: () => m.calls.push('gameReady'),
+      loadData: async () => (m.stored ? m.stored : null),
+      saveData: async (data: string) => {
+        m.stored = data;
+      },
+    },
+    engagement: {
+      sendScore: (s: { value: number }) => m.calls.push(`sendScore:${s.value}`),
+    },
+    health: {
+      logError: (...args: unknown[]) => m.calls.push(`logError:${args.length}`),
+    },
+    system: {
+      isAudioEnabled: () => false,
+      onAudioEnabledChange: () => undefined,
+      onPause: (cb: () => void) => {
+        m.pauseCb = cb;
+        m.calls.push('bind:onPause');
+      },
+      onResume: (cb: () => void) => {
+        m.resumeCb = cb;
+        m.calls.push('bind:onResume');
+      },
+    },
+  };
+  return m;
+}
+
+describe('Platform (mocked Playables host)', () => {
+  const g = globalThis as Record<string, unknown>;
+  const originalWindow = g.window;
+  const originalDocument = g.document;
+  let host: MockYt;
+
+  beforeEach(() => {
+    host = mockHost();
+    g.window = { ytgame: host.ytgame, localStorage: undefined };
+    g.document = { addEventListener: () => undefined, hidden: false };
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    g.window = originalWindow;
+    g.document = originalDocument;
+    vi.restoreAllMocks();
+  });
+
+  it('detects the Playables environment', () => {
+    expect(createPlatform('swirl').isPlayables).toBe(true);
+    expect(new Platform('swirl').kind).toBe('playables');
+  });
+
+  it('signals firstFrameReady before gameReady', async () => {
+    const p = new Platform('fold');
+    await p.ready();
+    expect(host.calls).toEqual(['firstFrameReady', 'gameReady']);
+  });
+
+  it('binds pause/resume on ytgame.system (not ytgame.game)', () => {
+    const p = new Platform('tissue');
+    let paused = 0;
+    let resumed = 0;
+    p.bindLifecycle({ pause: () => paused++, resume: () => resumed++ });
+    expect(host.calls).toEqual(['bind:onPause', 'bind:onResume']);
+    host.pauseCb?.();
+    expect(paused).toBe(1);
+    host.resumeCb?.();
+    expect(resumed).toBe(1);
+  });
+
+  it('never resumes over a user-chosen manual pause', () => {
+    const p = new Platform('frenzy');
+    let resumed = 0;
+    p.bindLifecycle({
+      pause: () => undefined,
+      resume: () => resumed++,
+      isManualPause: () => true,
+    });
+    host.pauseCb?.();
+    host.resumeCb?.();
+    expect(resumed).toBe(0);
+  });
+
+  it('round-trips saves through ytgame.game.saveData/loadData', async () => {
+    const p = new Platform('swirl');
+    await p.save({ best: 42 });
+    expect(await p.load({ best: 0 })).toEqual({ best: 42 });
+  });
+
+  it('sends integer scores via engagement.sendScore', () => {
+    new Platform('fold').sendScore(7.6);
+    expect(host.calls).toContain('sendScore:8');
+  });
+
+  it('reports errors through health.logError() with no parameters', () => {
+    new Platform('swirl').reportError('swirl', new Error('boom'));
+    expect(host.calls).toContain('logError:0');
+  });
+
+  it('reads host audio state from system.isAudioEnabled', () => {
+    expect(new Platform('tissue').isAudioEnabled()).toBe(false);
   });
 });

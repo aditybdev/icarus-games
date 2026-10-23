@@ -372,9 +372,18 @@ export class Game {
 
   // --------------------------------------------------------------- loop
 
+  /**
+   * Frozen-while-paused visual clock. Everything time-based in the renderer
+   * (sky drift, crowd, pollen, puffs, confetti) reads this, so a host or
+   * manual pause stops ALL animation — the Playables pause contract — while
+   * the raw rAF timestamp keeps dt math honest.
+   */
+  private visualNowMs = 0;
+
   private frame(t: number): void {
     const frameDt = Math.min(0.25, Math.max(0, (t - this.lastT) / 1000));
     this.lastT = t;
+    if (this.ui !== 'paused') this.visualNowMs += frameDt * 1000;
 
     if (this.ui === 'countdown') {
       this.countdownT -= frameDt;
@@ -400,7 +409,7 @@ export class Game {
       while (this.acc >= DT) {
         stepSim(this.sim, input, DT);
         this.acc -= DT;
-        this.drainEvents(t);
+        this.drainEvents(this.visualNowMs);
         if (this.sim.finished || this.sim.timedOut) {
           this.showResults();
           break;
@@ -423,7 +432,7 @@ export class Game {
     const pb = this.daily ? this.save.dailyBestMs : this.save.bestTimeMs;
     this.renderer.draw(this.sim, {
       camX: this.camX,
-      nowMs: t,
+      nowMs: this.visualNowMs,
       shake: this.shake,
       reducedMotion: this.save.reducedMotion === true,
       pbFlagX:

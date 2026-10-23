@@ -17,9 +17,11 @@ platform.bindLifecycle({
   resume: () => game.setPaused(false),
 });
 
-void game.init().catch((err) => platform.reportError('fold', err));
-
-// Signal readiness to the host after the first frame has been rendered.
-requestAnimationFrame(() => {
-  void platform.ready();
-});
+// gameReady must fire only once the UI is interactable — after init has
+// loaded the save and built the title screen, and a frame has painted.
+void game
+  .init()
+  .then(() => {
+    requestAnimationFrame(() => void platform.ready());
+  })
+  .catch((err) => platform.reportError('fold', err));
