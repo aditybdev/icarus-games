@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#14171f" />
+    <link rel="icon" href="data:," />
+    <title>Icarus Games</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 28px;
+        padding: 32px 20px;
+        background:
+          radial-gradient(1200px 600px at 50% -10%, #232a3d 0%, #14171f 55%),
+          #14171f;
+        color: #eef1f8;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        text-align: center;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(2rem, 6vw, 3rem);
+        font-weight: 800;
+        letter-spacing: 0.02em;
+      }
+      h1 span {
+        color: #ffb347;
+      }
+      .tagline {
+        margin: -16px 0 0;
+        color: #9aa3b8;
+        font-size: 1rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        width: min(960px, 100%);
+      }
+      a.card {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 22px 20px;
+        border-radius: 18px;
+        background: #1d2230;
+        border: 1px solid #2c3347;
+        color: inherit;
+        text-decoration: none;
+        text-align: left;
+        transition:
+          transform 0.12s ease,
+          border-color 0.12s ease;
+      }
+      a.card:hover,
+      a.card:focus-visible {
+        transform: translateY(-3px);
+        border-color: #4d5a80;
+        outline: none;
+      }
+      a.card:active {
+        transform: translateY(-1px) scale(0.99);
+      }
+      .name {
+        font-size: 1.25rem;
+        font-weight: 800;
+      }
+      .pitch {
+        color: #9aa3b8;
+        font-size: 0.92rem;
+        line-height: 1.45;
+      }
+      .swirl .name { color: #ff9ecb; }
+      .fold .name { color: #e8b08a; }
+      .frenzy .name { color: #9be07a; }
+      .tissue .name { color: #8ecbff; }
+      footer {
+        color: #6b7386;
+        font-size: 0.85rem;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        a.card {
+          transition: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Icarus <span>Games</span></h1>
+    <p class="tagline">Four tiny games, made with care.</p>
+    <div class="grid">
+      <a class="card swirl" href="./swirl/">
+        <span class="name">Swirl!</span>
+        <span class="pitch">Hold to dispense, drag to steer — stack the tallest, neatest soft-serve.</span>
+      </a>
+      <a class="card fold" href="./fold/">
+        <span class="name">Fold</span>
+        <span class="pitch">A calm origami puzzle. Tap a line, fold the paper, match the silhouette.</span>
+      </a>
+      <a class="card frenzy" href="./frenzy/">
+        <span class="name">Four-Leg Frenzy</span>
+        <span class="pitch">Four legs, zero coordination. Waddle a derpy pup across 50 metres.</span>
+      </a>
+      <a class="card tissue" href="./tissue/">
+        <span class="name">Tissue Rush</span>
+        <span class="pitch">Grab, pull, pop. Empty the box as fast as you can — chains build fever.</span>
+      </a>
+    </div>
+    <footer>Each game saves progress locally and works offline.</footer>
+  </body>
+</html>
