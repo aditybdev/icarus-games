@@ -630,6 +630,7 @@ export class Game {
   setPaused(paused: boolean): void {
     if (paused === this.paused) return;
     this.paused = paused;
+    document.body.classList.toggle('paused', paused);
     this.audio.setPaused(paused);
     if (paused) {
       this.pauseStarted = performance.now();

@@ -272,6 +272,7 @@ export class UI {
   setPaused(on: boolean): void {
     // The pause screen overlays whatever is currently shown (e.g. the
     // countdown) instead of replacing it, so resume restores it untouched.
+    document.body.classList.toggle('paused', on);
     this.screenPause.hidden = !on;
   }
 

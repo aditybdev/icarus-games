@@ -588,6 +588,9 @@
           grid-template-columns: repeat(4, 1fr);
         }
       }
+      body.paused *, body.paused *::before, body.paused *::after {
+        animation-play-state: paused !important;
+      }
     </style>
   </head>
   <body>

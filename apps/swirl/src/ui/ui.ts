@@ -360,6 +360,7 @@ export class UI {
   }
 
   setPaused(paused: boolean): void {
+    document.body.classList.toggle('paused', paused);
     this.show(this.pauseScreen, paused);
   }
 

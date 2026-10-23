@@ -218,6 +218,9 @@ export function setHapticsEnabled(enabled: boolean): void {
  */
 export function haptics(pattern: number | number[]): void {
   if (!hapticsEnabled) return;
+  // Chrome logs a console error when vibrate fires before any real gesture —
+  // stay silent until the user has actually tapped.
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
   try {
     navigator.vibrate?.(pattern);
   } catch {

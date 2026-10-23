@@ -220,6 +220,9 @@
       #legpad { gap: 6px; padding-top: 6px; padding-bottom: calc(6px + var(--sab)); }
       .legbtn { height: 52px; min-height: 52px; }
     }
+  body.paused *, body.paused *::before, body.paused *::after {
+    animation-play-state: paused !important;
+  }
   </style>
 </head>
 <body>

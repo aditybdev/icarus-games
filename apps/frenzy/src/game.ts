@@ -359,6 +359,7 @@ export class Game {
   setPaused(paused: boolean): void {
     if (paused && this.ui !== 'playing') return;
     if (!paused && this.ui !== 'paused') return;
+    document.body.classList.toggle('paused', paused);
     this.audio.setPaused(paused);
     this.input.releaseAll();
     this.setScreen(paused ? 'paused' : 'playing');

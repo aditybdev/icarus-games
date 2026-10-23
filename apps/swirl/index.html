@@ -664,6 +664,9 @@
         box-shadow: var(--shadow);
         white-space: nowrap;
       }
+      body.paused *, body.paused *::before, body.paused *::after {
+        animation-play-state: paused !important;
+      }
     </style>
     <script type="module" src="/src/main.ts"></script>
   </head>
