@@ -45,6 +45,7 @@ import {
 import {
   HINTS_PER_LEVEL,
   SaveData,
+  allComplete,
   continueTarget,
   currentTier,
   defaultSave,
@@ -109,6 +110,10 @@ export class Game {
   private cssW = 1;
   private cssH = 1;
   private introStart = 0;
+  /** Cache key of the last painted static menu desk ('' = needs repaint). */
+  private deskKey = '';
+  /** True once the frozen paused frame has been drawn behind the overlay. */
+  private pauseRendered = false;
   /** Reduced-motion gate: OS preference until the user toggles it in settings. */
   private reducedMotion: boolean;
   private foldAnimMs: number;
@@ -336,6 +341,10 @@ export class Game {
     this.screen = 'puzzle';
     this.ui.showScreen('puzzle');
     this.ui.showResults(false);
+    // The menu desk cache is stale now (the puzzle scene owns the canvas), and
+    // the HUD is visible so its height can be measured for the view layout.
+    this.deskKey = '';
+    this.resize();
     this.updateHud();
   }
 
@@ -614,6 +623,9 @@ export class Game {
     const dailyStreak = this.save.dailyStreak;
     const dailyBestStars = this.save.dailyBestStars;
     const sib = siblingForDay('fold');
+    // Captured after the save update so a completion that folds the final
+    // outstanding level — whatever level that is — gets the collection line.
+    const collectionComplete = allComplete(this.save);
     window.setTimeout(() => {
       // Bail if the completion was undone/reset or another level started
       // during the 450ms delay (all of those clear `completed`).
@@ -630,6 +642,7 @@ export class Game {
         streak,
         dailyStreak: this.dailyMode ? dailyStreak : undefined,
         dailyBest: this.dailyMode && dailyReplay ? dailyBestStars : undefined,
+        allComplete: collectionComplete,
         promoText: `More from Icarus: ${sib.name} — ${sib.pitch}`,
       });
     }, 450);
@@ -671,6 +684,10 @@ export class Game {
       this.canvas.style.width = `${this.cssW}px`;
       this.canvas.style.height = `${this.cssH}px`;
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // The backing-store realloc just cleared the canvas: repaint the frozen
+      // paused frame or the static menu desk on the next tick.
+      this.pauseRendered = false;
+      this.deskKey = '';
     }
     const hud = document.getElementById('hud');
     this.hudH = hud && !hud.hidden ? hud.getBoundingClientRect().height : 72;
@@ -689,13 +706,27 @@ export class Game {
 
     if (this.screen !== 'puzzle') {
       // Calm static backdrop behind the menus — the same desk + vignette the
-      // puzzle scene sits on, so the light never jumps between screens.
-      paintDesk(this.ctx, this.cssW, this.cssH);
+      // puzzle scene sits on, so the light never jumps between screens. The
+      // desk is fully deterministic for a given canvas size, so repaint only
+      // when the backing store changed (entry from the puzzle, or a resize
+      // clear) instead of 60 times a second.
+      const key = `${this.canvas.width}x${this.canvas.height}`;
+      if (key !== this.deskKey) {
+        this.deskKey = key;
+        paintDesk(this.ctx, this.cssW, this.cssH);
+      }
       return;
     }
 
-    const hud = document.getElementById('hud');
-    this.hudH = hud ? hud.getBoundingClientRect().height : 72;
+    // While paused the scene is frozen behind the pause overlay (the fold
+    // clock and confetti both hold at the pause instant), so draw it once and
+    // then stop burning full-scene renders the player cannot see.
+    if (this.paused) {
+      if (this.pauseRendered) return;
+      this.pauseRendered = true;
+    } else {
+      this.pauseRendered = false;
+    }
 
     let animView: FoldAnim | null = null;
     if (this.anim) {

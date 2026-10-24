@@ -73,6 +73,24 @@ export function hasMedalAtLeast(save: SaveData, medal: Medal): boolean {
   return false;
 }
 
+/**
+ * Human-readable unlock condition for a locked skin ("" when the skin is
+ * free by default or the index is unknown). Surfaced on the locked picker
+ * dots so the chase is communicated, not just the lock.
+ */
+export function skinUnlockHint(index: number): string {
+  switch (index) {
+    case 1:
+      return `pull ${SKIN_PULLS_UNLOCK} tissues total`;
+    case 2:
+      return 'earn any silver medal';
+    case 3:
+      return 'earn any gold medal';
+    default:
+      return '';
+  }
+}
+
 /** Unlock predicate per skin index: medals for Puffy/Luxe, pulls for Breezy. */
 export function skinUnlocked(index: number, save: SaveData): boolean {
   switch (index) {

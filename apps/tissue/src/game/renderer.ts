@@ -305,6 +305,9 @@ export class Renderer {
   private slotGrad: CanvasGradient | null = null;
   private sheetGrad: CanvasGradient | null = null;
   private sheetGradGold: CanvasGradient | null = null;
+  /* Layout-dependent font strings (rebuilt on resize — never per frame). */
+  private labelFont = '';
+  private subFont = '';
 
   /* ---- preallocated ribbon edge buffers (zero per-frame allocation) ---- */
   private readonly bufLx = new Float32Array(RIBBON_MAX);
@@ -545,6 +548,11 @@ export class Renderer {
     pg.addColorStop(0.75, '#ffe9a8');
     pg.addColorStop(1, '#f0bd4a');
     this.sheetGradGold = pg;
+
+    // Brand-label fonts depend only on the layout — build them here so the
+    // per-frame draw path allocates no font strings.
+    this.labelFont = `800 ${Math.round(L.boxW * 0.105)}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
+    this.subFont = `700 ${Math.round(L.boxW * 0.055)}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
   }
 
   resize(): void {
@@ -1204,12 +1212,12 @@ export class Renderer {
 
     // Brand label.
     ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.font = `800 ${Math.round(L.boxW * 0.105)}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
+    ctx.font = this.labelFont;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(skin.label, L.boxCX, ft + frontH * 0.5);
     ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.font = `700 ${Math.round(L.boxW * 0.055)}px ui-rounded, "SF Pro Rounded", system-ui, sans-serif`;
+    ctx.font = this.subFont;
     ctx.fillText(skin.sublabel, L.boxCX, ft + frontH * 0.71);
 
     // Front lip of the film collar + the slot's near rim, drawn over the
@@ -1250,22 +1258,22 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  /** Wavy soft sheet path, shared by the idle sheet and flyers. */
-  private sheetPath(
+  /** Wavy soft sheet silhouette, built once per frame and reused for the
+   *  idle sheet's fill, clip and halo stroke (flyers draw their own body). */
+  private buildSheetPath(
     cx: number,
     bottomY: number,
     w: number,
     h: number,
     sway: number,
     time: number,
-  ): void {
-    const ctx = this.ctx;
+  ): Path2D {
+    const path = new Path2D();
     const top = bottomY - h;
     const half = w / 2;
     const swayTop = sway * 7;
-    ctx.beginPath();
-    ctx.moveTo(cx - half + sway * 1.5, bottomY);
-    ctx.quadraticCurveTo(
+    path.moveTo(cx - half + sway * 1.5, bottomY);
+    path.quadraticCurveTo(
       cx - half - 3 + sway * 3,
       (top + bottomY) / 2,
       cx - half + swayTop,
@@ -1276,15 +1284,16 @@ export class Renderer {
       const t = i / steps;
       const px = cx - half + swayTop + w * t;
       const py = top + 4 + Math.sin(t * Math.PI * 2.2 + time * 2.2) * 2.6 - Math.sin(t * Math.PI) * 3;
-      ctx.lineTo(px, py);
+      path.lineTo(px, py);
     }
-    ctx.quadraticCurveTo(
+    path.quadraticCurveTo(
       cx + half + 3 + sway * 3,
       (top + bottomY) / 2,
       cx + half + sway * 1.5,
       bottomY,
     );
-    ctx.closePath();
+    path.closePath();
+    return path;
   }
 
   private drawIdleSheet(time: number): void {
@@ -1321,16 +1330,15 @@ export class Renderer {
     ctx.globalAlpha = 1;
 
     // Paper body: cached lit gradient, slightly translucent against the box.
+    const silhouette = this.buildSheetPath(L.boxCX, bottom, L.sheetW, h, sway, time);
     ctx.globalAlpha = 0.96;
     ctx.fillStyle = (gold ? this.sheetGradGold : this.sheetGrad) ?? (gold ? '#ffe9a8' : '#f7fafd');
-    this.sheetPath(L.boxCX, bottom, L.sheetW, h, sway, time);
-    ctx.fill();
+    ctx.fill(silhouette);
     ctx.globalAlpha = 1;
 
     // Paper texture: quilted diamond emboss + fiber grain, clipped to the sheet.
     ctx.save();
-    this.sheetPath(L.boxCX, bottom, L.sheetW, h, sway, time);
-    ctx.clip();
+    ctx.clip(silhouette);
     if (this.embossPattern) {
       ctx.globalAlpha = gold ? 0.08 : 0.11;
       ctx.fillStyle = this.embossPattern;
@@ -1346,8 +1354,7 @@ export class Renderer {
     // Alpha-feathered edges: a soft halo stroke around the silhouette.
     ctx.strokeStyle = gold ? 'rgba(255,240,190,0.28)' : 'rgba(255,255,255,0.26)';
     ctx.lineWidth = 3;
-    this.sheetPath(L.boxCX, bottom, L.sheetW, h, sway, time);
-    ctx.stroke();
+    ctx.stroke(silhouette);
 
     // Key-light edge shading: lit left rim, shaded right rim.
     const top = bottom - h;

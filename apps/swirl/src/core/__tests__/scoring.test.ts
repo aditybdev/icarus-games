@@ -3,10 +3,12 @@ import {
   CM_PER_UNIT,
   COMBO_MAX_MULTIPLIER,
   COMBO_STEP_TIME,
+  MAX_HEIGHT,
   TURBO_GAIN_MAX,
   TURBO_SCORE_RATE,
 } from '../constants';
 import {
+  canDispense,
   createCombo,
   createTurbo,
   freeSwirlScore,
@@ -113,6 +115,23 @@ describe('turbo overdrive', () => {
   it('ramps the wobble-gain scale and caps it', () => {
     expect(turboGainScale(createTurbo())).toBe(1);
     expect(turboGainScale({ time: 999, score: 0 })).toBe(TURBO_GAIN_MAX);
+  });
+
+  it('stays reachable at max height in Free Swirl (regression: dead turbo)', () => {
+    // The turbo bonus only accrues while dispensing; if dispensing is gated
+    // off at MAX_HEIGHT the whole overdrive is unreachable.
+    expect(canDispense(true, true, MAX_HEIGHT)).toBe(true);
+    expect(canDispense(true, true, MAX_HEIGHT - 0.001)).toBe(true);
+  });
+
+  it('caps dispensing at max height in Order Rush', () => {
+    expect(canDispense(false, true, MAX_HEIGHT)).toBe(false);
+    expect(canDispense(false, true, MAX_HEIGHT - 0.001)).toBe(true);
+  });
+
+  it('never dispenses without held input', () => {
+    expect(canDispense(true, false, 0)).toBe(false);
+    expect(canDispense(false, false, 0)).toBe(false);
   });
 });
 

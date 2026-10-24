@@ -7,7 +7,7 @@ import { ROUND_SIZES, type RoundSize } from '../core/constants';
 import { bestMedalFor, type Medal } from '../core/medals';
 import { formatMs } from '../core/round';
 import type { SaveData } from '../core/save';
-import { BOX_SKINS, skinUnlocked } from '../core/skins';
+import { BOX_SKINS, skinUnlocked, skinUnlockHint } from '../core/skins';
 
 export interface ResultsData {
   timeText: string;
@@ -84,6 +84,7 @@ export class UI {
   private readonly menuStats = el('menu-stats');
   private readonly skinRow = el('skin-row');
   private readonly skinDots: HTMLButtonElement[] = [];
+  private readonly sizeBtns = new Map<RoundSize, HTMLButtonElement>();
   private readonly dailyStreakLabel = el('daily-streak-label');
   private readonly dailyDoneBadge = el('daily-done-badge');
   private readonly dailyChip = el('daily-chip');
@@ -92,6 +93,7 @@ export class UI {
     for (const size of ROUND_SIZES) {
       const btn = document.querySelector<HTMLButtonElement>(`.size-btn[data-size="${size}"]`);
       btn?.addEventListener('click', () => cb.onPlay(size));
+      if (btn) this.sizeBtns.set(size, btn);
     }
     const sub = this.remainingEl.parentElement?.querySelector<HTMLElement>('.chip-sub');
     if (!sub) throw new Error('missing .chip-sub');
@@ -135,6 +137,16 @@ export class UI {
       dot.classList.remove('bronze', 'silver', 'gold');
       const medal = bestMedalFor(size, best);
       if (medal) dot.classList.add(medal);
+      // The dot is visual-only, so the button itself carries the full state
+      // (size, best time, medal) for screen readers.
+      this.sizeBtns
+        .get(size)
+        ?.setAttribute(
+          'aria-label',
+          `${size} tissues — ${best === null ? 'no time yet' : `best ${formatMs(best)}`}${
+            medal ? `, ${medal} medal earned` : ''
+          }`,
+        );
     }
     // Lifetime stats line ("312 rounds · best streak 18").
     const { roundsPlayed, totalPulled, bestStreak } = save.stats;
@@ -148,16 +160,22 @@ export class UI {
     const scoreLine = el('score-line');
     scoreLine.textContent = icarusScore > 0 ? `Icarus Score ${icarusScore.toLocaleString()}` : '';
     scoreLine.hidden = icarusScore <= 0;
-    // Skin picker: unlocked dots are tappable, locked ones greyed out.
+    // Skin picker: unlocked dots are tappable, locked ones greyed out — and
+    // the lock now says HOW to open it (aria-label + hover title).
     BOX_SKINS.forEach((skin, index) => {
       const dot = this.skinDots[index];
       const unlocked = skinUnlocked(index, save);
       dot.classList.toggle('locked', !unlocked);
       dot.classList.toggle('selected', index === save.skin);
+      const hint = unlocked ? '' : skinUnlockHint(index);
       dot.setAttribute(
         'aria-label',
-        unlocked ? `${skin.name} box skin` : `${skin.name} box skin (locked)`,
+        unlocked
+          ? `${skin.name} box skin`
+          : `${skin.name} box skin (locked${hint ? ` — ${hint}` : ''})`,
       );
+      dot.setAttribute('aria-disabled', String(!unlocked));
+      dot.title = unlocked ? skin.name : hint ? `Locked — ${hint}` : 'Locked';
     });
     // Daily Sprint tags: streak flame while a streak is alive, plus a done
     // badge once today's run is completed (the sprint stays replayable).

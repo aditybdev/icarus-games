@@ -13,6 +13,7 @@ import {
   COMBO_DECAY,
   COMBO_MAX_MULTIPLIER,
   COMBO_STEP_TIME,
+  MAX_HEIGHT,
   TURBO_GAIN_MAX,
   TURBO_GAIN_RAMP,
   TURBO_SCORE_RATE,
@@ -74,6 +75,24 @@ export function multiplierFor(combo: ComboState): number {
 }
 
 /* ---------------------- turbo overdrive (P2-3) ---------------------- */
+
+/**
+ * Whether a held dispense input actually dispenses this frame.
+ * Free Swirl keeps dispensing at max height: the turbo overdrive below is
+ * documented as "bonus accrues while dispensing" past MAX_HEIGHT, and the
+ * combo streak is "time dispensing inside the dead zone" — capping dispensing
+ * at MAX_HEIGHT made both unreachable (regression guard: this predicate is
+ * the ONLY gate between the input and updateTurbo's `dispensing` argument).
+ * Order Rush (isFree = false) still caps dispensing at max height.
+ */
+export function canDispense(
+  isFree: boolean,
+  inputHeld: boolean,
+  height: number,
+  maxHeight: number = MAX_HEIGHT,
+): boolean {
+  return inputHeld && (isFree || height < maxHeight);
+}
 
 /** Overdrive state past MAX_HEIGHT: elapsed time + accrued bonus points. */
 export interface TurboState {

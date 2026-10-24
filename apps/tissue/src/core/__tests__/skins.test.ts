@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { MEDAL_TARGETS_MS } from '../constants';
 import { emptySave, normalizeSave } from '../save';
-import { BOX_SKINS, hasMedalAtLeast, resolveSkin, SKIN_PULLS_UNLOCK, skinUnlocked } from '../skins';
+import {
+  BOX_SKINS,
+  hasMedalAtLeast,
+  resolveSkin,
+  SKIN_PULLS_UNLOCK,
+  skinUnlocked,
+  skinUnlockHint,
+} from '../skins';
 
 describe('box skins data', () => {
   it('every skin has a complete palette and label set', () => {
@@ -46,6 +53,23 @@ describe('skin unlock rules', () => {
     const gold = normalizeSave({ bestMs: { 100: MEDAL_TARGETS_MS[100].gold } });
     expect(skinUnlocked(2, gold)).toBe(true); // gold implies silver-or-better
     expect(skinUnlocked(3, gold)).toBe(true);
+  });
+});
+
+describe('skinUnlockHint', () => {
+  it('states the condition for each unlockable skin and "" for free/unknown', () => {
+    expect(skinUnlockHint(0)).toBe('');
+    expect(skinUnlockHint(1)).toBe(`pull ${SKIN_PULLS_UNLOCK} tissues total`);
+    expect(skinUnlockHint(2)).toBe('earn any silver medal');
+    expect(skinUnlockHint(3)).toBe('earn any gold medal');
+    expect(skinUnlockHint(99)).toBe('');
+  });
+
+  it('every locked-by-default skin has a non-empty hint (no dead-end locks)', () => {
+    const save = emptySave();
+    BOX_SKINS.forEach((_, index) => {
+      if (!skinUnlocked(index, save)) expect(skinUnlockHint(index).length).toBeGreaterThan(0);
+    });
   });
 });
 

@@ -16,8 +16,11 @@
         --sky-deep: #3d9ede;
         --mint: #6fe3b0;
         --mint-deep: #34bd85;
+        /* Small-text variants of the accents: same hues, WCAG-AA on the card. */
+        --mint-text: #157f52;
+        --pink-text: #d23659;
         --ink: #1d4e6b;
-        --ink-soft: #4d7d99;
+        --ink-soft: #4c7b97;
         --card: rgba(255, 255, 255, 0.94);
         --shadow: 0 10px 30px rgba(45, 110, 160, 0.2);
       }
@@ -25,6 +28,12 @@
       * {
         box-sizing: border-box;
         -webkit-tap-highlight-color: transparent;
+      }
+
+      /* Consistent keyboard focus ring (only shows for keyboard focus). */
+      :focus-visible {
+        outline: 3px solid var(--sky-deep);
+        outline-offset: 2px;
       }
 
       html,
@@ -236,7 +245,7 @@
         min-height: 16px;
         font-size: 14px;
         font-weight: 700;
-        color: var(--mint-deep);
+        color: var(--mint-text);
       }
 
       /* Medal dot earned on this size (best-time medal). */
@@ -351,7 +360,7 @@
         font-size: 14px;
         font-weight: 900;
         letter-spacing: 1px;
-        color: #d9733a;
+        color: #b85a1a;
         pointer-events: none;
       }
 
@@ -359,7 +368,7 @@
       #results-daily-best {
         font-size: 15px;
         font-weight: 800;
-        color: #d9733a;
+        color: #b85a1a;
       }
 
       #results-daily-streak {
@@ -399,7 +408,7 @@
         margin: 2px 0 0;
         font-size: 15px;
         font-weight: 800;
-        color: #5b93d6;
+        color: #3f74b8;
       }
 
       #results-promo {
@@ -523,11 +532,11 @@
 
       #streak-chip {
         top: calc(env(safe-area-inset-top, 0px) + 68px);
-        color: #ef8b1f;
+        color: #a85f04;
       }
 
       #streak-chip.hot {
-        color: #ff5e7a;
+        color: var(--pink-text);
       }
 
       #streak-chip.bump {
@@ -567,11 +576,11 @@
       #pace-chip {
         top: calc(env(safe-area-inset-top, 0px) + 114px);
         font-size: 15px;
-        color: var(--mint-deep);
+        color: var(--mint-text);
       }
 
       #pace-chip.behind {
-        color: #ff5e7a;
+        color: var(--pink-text);
       }
 
       #streak-pop {
@@ -644,7 +653,7 @@
         font-weight: 800;
         letter-spacing: 1px;
         text-transform: uppercase;
-        color: #8fb3c7;
+        color: #547691;
       }
 
       #results-delta {
@@ -653,11 +662,11 @@
       }
 
       #results-delta.ahead {
-        color: var(--mint-deep);
+        color: var(--mint-text);
       }
 
       #results-delta.behind {
-        color: #ff5e7a;
+        color: var(--pink-text);
       }
 
       #results-best {
@@ -668,7 +677,7 @@
       }
 
       #results-best.new-best {
-        color: #ff5e7a;
+        color: var(--pink-text);
       }
 
       #results-medal {
@@ -696,11 +705,11 @@
       }
 
       #results-medal.silver {
-        color: #8b9fb3;
+        color: #6f8496;
       }
 
       #results-medal.gold {
-        color: #d99a1f;
+        color: #b87e10;
       }
 
       #results-next-medal {
@@ -781,7 +790,7 @@
         <button id="btn-blitz" class="btn btn-blitz btn-big" type="button">
           Blitz — 30 s score attack
         </button>
-        <div id="skin-row" aria-label="Box skins"></div>
+        <div id="skin-row" role="group" aria-label="Box skins"></div>
         <p id="menu-stats" hidden></p>
         <p id="score-line" hidden></p>
         <button id="btn-howto" class="btn btn-big" type="button">How to play</button>

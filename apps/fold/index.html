@@ -16,7 +16,10 @@
         --paper: #f8f2e6;
         --panel: #fffaf0;
         --ink: #4a3f30;
-        --muted: #8a7358;
+        /* Slightly deepened from #8a7358 so 13–16px text clears 4.5:1 on both
+           the panel (#fffaf0) and desk (#f6f0e2) backgrounds — same brown
+           family, no visual redesign. */
+        --muted: #7d6a4c;
         --terra: #c96f4a;
         --terra-dark: #b25a37;
         --sage: #7d9b76;
@@ -94,6 +97,14 @@
       }
       .btn.pulse {
         animation: pulse-btn 0.9s ease-in-out 3;
+      }
+      /* Keyboard focus indicator in the palette's sage — pointer users never
+         see it (focus-visible only), so the visual design is unchanged. */
+      .btn:focus-visible,
+      .level-cell:focus-visible,
+      .toast-action:focus-visible {
+        outline: 3px solid var(--sage);
+        outline-offset: 2px;
       }
       @keyframes pulse-btn {
         0%,
@@ -238,7 +249,9 @@
       }
 
       #score-line {
-        color: var(--sage);
+        /* Deeper sage than --sage: 15px text needs ~4.5:1 on the desk
+           background; the accent sage (checkboxes, badges) stays untouched. */
+        color: #567050;
         font-size: 15px;
         font-weight: 800;
         min-height: 18px;
@@ -323,6 +336,15 @@
         color: var(--muted);
         font-size: 14px;
         font-weight: 600;
+      }
+      /* Collection-complete banner, same calm gold family as the streak lines. */
+      #levels-complete {
+        margin-top: -6px;
+        color: #b08d2e;
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-align: center;
       }
       #level-grid {
         display: grid;
@@ -510,6 +532,15 @@
         font-weight: 700;
         letter-spacing: 0.4px;
       }
+      /* All-levels-folded acknowledgment, same calm gold as the streak line. */
+      #results-complete {
+        margin-top: -6px;
+        color: #b08d2e;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        text-align: center;
+      }
       #results-stats {
         color: var(--muted);
         font-size: 15px;
@@ -665,6 +696,7 @@
             <h2>Levels</h2>
           </div>
           <div id="levels-progress"></div>
+          <div id="levels-complete" hidden></div>
           <div id="level-grid"></div>
         </div>
       </div>
@@ -688,6 +720,7 @@
           <div id="results-streak" hidden></div>
           <div id="results-daily" hidden></div>
           <div id="results-daily-best" hidden></div>
+          <div id="results-complete" hidden></div>
           <div id="results-stats"></div>
           <div id="results-promo" hidden></div>
           <div class="row">

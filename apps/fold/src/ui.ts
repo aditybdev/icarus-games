@@ -5,7 +5,7 @@
 
 import { LEVELS } from './levels';
 import { renderFigure } from './renderer';
-import { SaveData, galleryCards, totalStars } from './scoring';
+import { SaveData, allComplete, galleryCards, totalStars } from './scoring';
 
 export interface UICallbacks {
   onPlay(): void;
@@ -104,6 +104,14 @@ export class UI {
 
   renderLevelGrid(save: SaveData): void {
     el('levels-progress').textContent = `${totalStars(save)} / ${LEVELS.length * 3} ★`;
+    // Explicit end-of-content acknowledgment: once every level has been
+    // folded at least once, say so instead of only showing the star count.
+    const banner = el('levels-complete');
+    const done = allComplete(save);
+    banner.hidden = !done;
+    if (done) {
+      banner.textContent = `Collection complete — all ${LEVELS.length} figures folded`;
+    }
     const grid = el('level-grid');
     grid.textContent = '';
     LEVELS.forEach((level, i) => {
@@ -121,6 +129,12 @@ export class UI {
         starSpan.className = 'cell-stars';
         starSpan.textContent = '★'.repeat(stars) + '☆'.repeat(3 - stars);
         btn.appendChild(starSpan);
+        btn.setAttribute(
+          'aria-label',
+          stars > 0
+            ? `Level ${level.id}, ${stars} of 3 stars`
+            : `Level ${level.id}, not yet completed`,
+        );
         btn.addEventListener('click', () => this.callbacks.onSelectLevel(i));
       } else {
         btn.classList.add('locked');
@@ -130,6 +144,7 @@ export class UI {
         btn.appendChild(lock);
         btn.disabled = true;
         btn.setAttribute('aria-disabled', 'true');
+        btn.setAttribute('aria-label', `Level ${level.id}, locked`);
       }
       grid.appendChild(btn);
     });
@@ -217,6 +232,8 @@ export class UI {
       dailyStreak?: number;
       /** Best stars on today's daily so far (shown when replaying the daily). */
       dailyBest?: number;
+      /** Every level folded at least once — show the collection-complete line. */
+      allComplete?: boolean;
       /** "More from Icarus" sibling pitch line. */
       promoText?: string;
     },
@@ -247,6 +264,14 @@ export class UI {
     const showDailyBest = opts.dailyBest !== undefined;
     el('results-daily-best').hidden = !showDailyBest;
     if (showDailyBest) el('results-daily-best').textContent = `Daily best: ${opts.dailyBest} ★`;
+    // End-of-content acknowledgment: this completion folded the last
+    // outstanding level, so there is nothing left to unlock.
+    const showComplete = opts.allComplete === true;
+    el('results-complete').hidden = !showComplete;
+    if (showComplete) {
+      el('results-complete').textContent =
+        `Collection complete — all ${LEVELS.length} figures folded`;
+    }
     el('results-stats').textContent = `Folds ${opts.folds} · Par ${opts.par} · Hints ${opts.hints}`;
     el('results-promo').hidden = !opts.promoText;
     if (opts.promoText) el('results-promo').textContent = opts.promoText;

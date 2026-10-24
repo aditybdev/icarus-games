@@ -68,6 +68,9 @@ const BLOOM_MS = 1100;
  * per-frame loop never allocates an array literal. */
 const LEG_ORDER = [1, 3, 0, 2] as const;
 
+/** Ear mirror signs — module const for the same no-alloc reason as LEG_ORDER. */
+const EAR_SIGNS = [-1, 1] as const;
+
 /** Hill layers: [parallax, color, amplitude, frequency]. */
 const HILL_LAYERS: ReadonlyArray<readonly [number, string, number, number]> = [
   [0.35, '#a5d977', 0.55, 0.9],
@@ -965,7 +968,7 @@ export class Renderer {
     ctx.stroke();
     // ears
     ctx.fillStyle = BODY_DARK;
-    for (const s of [-1, 1]) {
+    for (const s of EAR_SIGNS) {
       ctx.beginPath();
       ctx.moveTo(hx + s * ppm * 0.08 - ppm * 0.05, hy - ppm * 0.14);
       ctx.lineTo(hx + s * ppm * 0.1, hy - ppm * 0.3);

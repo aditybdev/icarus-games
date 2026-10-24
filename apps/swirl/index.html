@@ -79,6 +79,15 @@
         box-shadow: 0 2px 0 var(--pink-deep), var(--shadow);
       }
 
+      /* Keyboard-only focus indicator (never shown for pointer/touch). */
+      .btn:focus-visible,
+      .icon-btn:focus-visible,
+      .flavor-btn:focus-visible,
+      .setrow input:focus-visible {
+        outline: 3px solid var(--choc);
+        outline-offset: 2px;
+      }
+
       .btn-secondary {
         background: var(--mint);
         box-shadow: 0 6px 0 #54c495, var(--shadow);
@@ -138,14 +147,14 @@
         margin: 0;
         font-size: 14px;
         font-weight: 700;
-        color: #a8845c;
+        color: #8a6a48;
       }
 
       .daily-line {
         margin: 4px 0 0;
         font-size: 14px;
         font-weight: 700;
-        color: #b87300;
+        color: #996200;
         min-height: 18px;
       }
 
@@ -247,14 +256,14 @@
         margin: 0;
         font-size: 16px;
         font-weight: 600;
-        color: #9a7460;
+        color: #84604b;
       }
 
       .best-line {
         min-height: 20px;
         font-size: 14px;
         font-weight: 700;
-        color: #b08a72;
+        color: #8a6a50;
       }
 
       .howto-list {
@@ -274,7 +283,7 @@
         margin: 4px 0 0;
         font-size: 14px;
         line-height: 1.5;
-        color: #9a7460;
+        color: #84604b;
       }
 
       /* ---------- HUD ---------- */
@@ -460,7 +469,7 @@
         margin: 0;
         font-size: 13px;
         font-weight: 700;
-        color: #b08a72;
+        color: #8a6a50;
       }
 
       @keyframes wobble-pulse {
@@ -471,7 +480,7 @@
       .hud-caption {
         font-size: 14px;
         font-weight: 700;
-        color: #9a7460;
+        color: #84604b;
         padding-left: 4px;
       }
 
@@ -541,7 +550,7 @@
         font-weight: 800;
         letter-spacing: 1px;
         text-transform: uppercase;
-        color: #b08a72;
+        color: #8a6a50;
       }
 
       #order-card-flavor {
@@ -554,7 +563,7 @@
         margin: 0;
         font-size: 16px;
         font-weight: 700;
-        color: #9a7460;
+        color: #84604b;
       }
 
       #results-title {
@@ -634,13 +643,13 @@
       #results-score {
         font-size: 20px;
         font-weight: 800;
-        color: #9a7460;
+        color: #84604b;
       }
 
       #results-best {
         font-size: 15px;
         font-weight: 700;
-        color: #b08a72;
+        color: #8a6a50;
       }
 
       #results-best.new-best {
@@ -787,6 +796,6 @@
       </div>
     </div>
 
-    <div id="toast" hidden></div>
+    <div id="toast" role="status" aria-live="polite" hidden></div>
   </body>
 </html>

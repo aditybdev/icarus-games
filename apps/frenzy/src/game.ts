@@ -20,7 +20,7 @@ import {
 } from '@icarus/platform';
 import { AudioFx } from './audio';
 import { LegInput } from './input';
-import { Renderer } from './render/renderer';
+import { Renderer, type ViewState } from './render/renderer';
 import {
   DEFAULT_SAVE,
   normalizeSave,
@@ -102,6 +102,21 @@ export class Game {
   private lastFalls = '';
   private lastPace = '';
   private lastCaretPct: Record<string, string> = {};
+  /** Reusable sim input: copying 4 booleans into a stable tuple replaces the
+   * per-frame `{ held: [...] }` allocation (the renderer/sim never retain it). */
+  private readonly simInput: SimInput = { held: [false, false, false, false] };
+  /** Reusable view-state bag: the renderer reads it synchronously inside
+   * draw(), so one mutated object replaces a per-frame object literal. */
+  private readonly viewState: ViewState = {
+    camX: 0,
+    nowMs: 0,
+    shake: 0,
+    reducedMotion: false,
+    pbFlagX: null,
+  };
+  /** Lazily-resolved HUD elements that updateHud used to look up every frame. */
+  private caretEls: Partial<Record<Rank, HTMLElement>> = {};
+  private paceChipEl: HTMLElement | null = null;
 
   constructor(private platform: Platform) {
     const canvas = $('scene') as HTMLCanvasElement;
@@ -284,6 +299,10 @@ export class Game {
       'hidden',
       !this.daily || name === 'title' || name === 'results',
     );
+    // Keep the body's paused flag in lockstep with the screen state: the
+    // pause-overlay Restart/Menu paths never went through setPaused(false),
+    // so 'paused' used to stay set while the game was running again.
+    document.body.classList.toggle('paused', name === 'paused');
     if (name !== 'paused') this.closeSettings();
   }
 
@@ -425,9 +444,14 @@ export class Game {
     const active = this.ui === 'playing';
     if (active) {
       this.acc += frameDt;
-      const input: SimInput = { held: [...this.input.held] as [boolean, boolean, boolean, boolean] };
+      const held = this.simInput.held;
+      const src = this.input.held;
+      held[0] = src[0];
+      held[1] = src[1];
+      held[2] = src[2];
+      held[3] = src[3];
       while (this.acc >= DT) {
-        stepSim(this.sim, input, DT);
+        stepSim(this.sim, this.simInput, DT);
         this.acc -= DT;
         this.drainEvents(this.visualNowMs);
         if (this.sim.finished || this.sim.timedOut) {
@@ -450,16 +474,16 @@ export class Game {
     if (active) this.updateHud();
     // In the Daily Race the pace flag chases today's best daily time instead.
     const pb = this.daily ? this.save.dailyBestMs : this.save.bestTimeMs;
-    this.renderer.draw(this.sim, {
-      camX: this.camX,
-      nowMs: this.visualNowMs,
-      shake: this.shake,
-      reducedMotion: this.save.reducedMotion === true,
-      pbFlagX:
-        this.sim.mode === 'race' && pb != null
-          ? pbPaceX(effectiveTimeMs(this.sim.timeMs, this.sim.penaltyMs), pb)
-          : null,
-    });
+    const v = this.viewState;
+    v.camX = this.camX;
+    v.nowMs = this.visualNowMs;
+    v.shake = this.shake;
+    v.reducedMotion = this.save.reducedMotion === true;
+    v.pbFlagX =
+      this.sim.mode === 'race' && pb != null
+        ? pbPaceX(effectiveTimeMs(this.sim.timeMs, this.sim.penaltyMs), pb)
+        : null;
+    this.renderer.draw(this.sim, v);
   }
 
   /** Haptics: touch devices only (body.touch is set by input.ts). */
@@ -561,7 +585,7 @@ export class Game {
 
     // Pace ladder: sliding rank carets + projected-rank chip (race only).
     for (const t of RANK_THRESHOLDS_MS) {
-      const el = $(`caret-${t.rank.toLowerCase()}`);
+      const el = (this.caretEls[t.rank] ??= $(`caret-${t.rank.toLowerCase()}`));
       el.classList.toggle('hidden', !race);
       if (race) {
         const pct = `${paceBarPct(eff, t.maxMs).toFixed(2)}%`;
@@ -571,7 +595,7 @@ export class Game {
         }
       }
     }
-    const paceChip = $('hud-pace');
+    const paceChip = (this.paceChipEl ??= $('hud-pace'));
     paceChip.classList.toggle('hidden', !race);
     if (race) {
       const pace = `pace: ${projectedRank(eff, dist) ?? '—'}`;
@@ -653,6 +677,11 @@ export class Game {
       lines.push(`Distance: ${formatMetres(s.distance)}`);
     }
     lines.push(`Stumbles: ${s.stumbles} · Wipeouts: ${s.wipeouts}`);
+    // Top-rank acknowledgment: the RANK UP chip only fires when an earlier
+    // best rank existed to beat, so a first-run S got no pinnacle callout.
+    if (s.finished && rank === 'S') {
+      lines.push('Top rank — S is as good as it gets!');
+    }
     if (s.mode === 'race' && this.save.bestTimeMs != null) {
       lines.push(`Best: ${formatSeconds(this.save.bestTimeMs)}`);
     }

@@ -93,6 +93,11 @@ export class UI {
   private toastTimer = 0;
   private lastScore = -1;
   private lastCombo = 1;
+  /** Cached last-written HUD values; skips redundant per-frame DOM writes. */
+  private lastCm = -1;
+  private lastFillPct = '';
+  private lastWobblePct = '';
+  private lastWobbleDanger = false;
   private starTimers: number[] = [];
   private countRaf = 0;
   private readonly starReveal: (index: number) => void;
@@ -124,6 +129,7 @@ export class UI {
       btn.dataset.flavor = flavor;
       btn.style.setProperty('--flavor', css(FLAVOR_COLORS[flavor]));
       btn.setAttribute('aria-label', FLAVOR_LABELS[flavor]);
+      btn.setAttribute('aria-pressed', 'false');
       const label = document.createElement('span');
       label.className = 'flavor-btn-label';
       label.textContent = FLAVOR_LABELS[flavor];
@@ -185,16 +191,26 @@ export class UI {
     this.show(this.comboChip, false);
     this.lastScore = -1;
     this.lastCombo = 1;
+    this.lastCm = -1;
+    this.lastFillPct = '';
+    this.lastWobblePct = '';
+    this.lastWobbleDanger = false;
     this.doneBtn.textContent = mode === 'rush' ? 'Serve!' : 'Done';
   }
 
   setHeight(heightUnits: number): void {
-    this.meterLabel.textContent = `${heightToCm(heightUnits)} cm`;
+    const cm = heightToCm(heightUnits);
+    if (cm === this.lastCm) return;
+    this.lastCm = cm;
+    this.meterLabel.textContent = `${cm} cm`;
   }
 
   setHeightFill(frac: number): void {
     const f = Math.min(1, Math.max(0, frac));
-    this.meterFill.style.height = `${(f * 100).toFixed(1)}%`;
+    const pct = `${(f * 100).toFixed(1)}%`;
+    if (pct === this.lastFillPct) return;
+    this.lastFillPct = pct;
+    this.meterFill.style.height = pct;
   }
 
   /** Position the target band on the meter (fractions of max height). */
@@ -248,8 +264,16 @@ export class UI {
   /** 0 = steady, 1 = at the topple threshold. */
   setWobble(frac: number): void {
     const f = Math.min(1, Math.max(0, frac));
-    this.wobbleDot.style.left = `${(f * 100).toFixed(1)}%`;
-    this.wobbleBox.classList.toggle('danger', f > 0.75);
+    const pct = `${(f * 100).toFixed(1)}%`;
+    if (pct !== this.lastWobblePct) {
+      this.lastWobblePct = pct;
+      this.wobbleDot.style.left = pct;
+    }
+    const danger = f > 0.75;
+    if (danger !== this.lastWobbleDanger) {
+      this.lastWobbleDanger = danger;
+      this.wobbleBox.classList.toggle('danger', danger);
+    }
   }
 
   setFlavor(flavor: Flavor): void {
@@ -257,7 +281,9 @@ export class UI {
     this.flavorName.textContent = FLAVOR_LABELS[flavor];
     for (const child of Array.from(this.flavorBar.children)) {
       const btn = child as HTMLButtonElement;
-      btn.classList.toggle('active', btn.dataset.flavor === flavor);
+      const active = btn.dataset.flavor === flavor;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
     }
   }
 

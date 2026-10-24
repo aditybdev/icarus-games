@@ -105,7 +105,10 @@ export class World {
     const sun = new THREE.DirectionalLight(0xffffff, 1.45);
     sun.position.set(4.5, 11, 6.5);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    // 1024 is ample for a 14-unit shadow camera (~73 texels/world-unit) and
+    // quarters the per-frame shadow-pass fill cost vs 2048 — the shadow map
+    // re-renders every frame because the cone/swirl move continuously.
+    sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.left = -7;
     sun.shadow.camera.right = 7;
     sun.shadow.camera.top = 12;

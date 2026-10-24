@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  allComplete,
   continueTarget,
   currentTier,
   defaultSave,
@@ -250,6 +251,31 @@ describe('masteryFor', () => {
 
   it('is 0 for an empty level list (defensive)', () => {
     expect(masteryFor(defaultSave(0))).toBe(0);
+  });
+});
+
+describe('allComplete', () => {
+  it('is false on a fresh save', () => {
+    expect(allComplete(defaultSave(30))).toBe(false);
+  });
+
+  it('is false while any single level is incomplete', () => {
+    const save = defaultSave(30);
+    save.stars.fill(3);
+    save.stars[17] = 0; // one gap anywhere blocks the collection
+    expect(allComplete(save)).toBe(false);
+  });
+
+  it('is true when every level has any star rating', () => {
+    const save = defaultSave(30);
+    save.stars.fill(1); // 1-star clears still count as folded
+    expect(allComplete(save)).toBe(true);
+    save.stars.fill(3);
+    expect(allComplete(save)).toBe(true);
+  });
+
+  it('is false for an empty level list (defensive)', () => {
+    expect(allComplete(defaultSave(0))).toBe(false);
   });
 });
 

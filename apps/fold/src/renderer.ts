@@ -111,17 +111,35 @@ export function computeView(
     play = { x: 14, y: hudH + 12, w: w - 28 - g - 14, h: h - hudH - 26 };
   }
 
-  const pts: Pt[] = [];
-  for (const layer of state.layers) for (const p of layer.poly) pts.push(p);
-  for (const c of level.creases) {
-    pts.push(c.a, c.b);
+  // Bbox over all layer points and crease endpoints, computed inline so the
+  // per-frame call allocates nothing.
+  let minx = Infinity;
+  let miny = Infinity;
+  let maxx = -Infinity;
+  let maxy = -Infinity;
+  for (const layer of state.layers) {
+    for (const p of layer.poly) {
+      if (p.x < minx) minx = p.x;
+      if (p.y < miny) miny = p.y;
+      if (p.x > maxx) maxx = p.x;
+      if (p.y > maxy) maxy = p.y;
+    }
   }
-  const bb = bboxOf(pts);
-  const bbw = Math.max(bb.maxx - bb.minx, 1e-6);
-  const bbh = Math.max(bb.maxy - bb.miny, 1e-6);
+  for (const c of level.creases) {
+    if (c.a.x < minx) minx = c.a.x;
+    if (c.a.y < miny) miny = c.a.y;
+    if (c.a.x > maxx) maxx = c.a.x;
+    if (c.a.y > maxy) maxy = c.a.y;
+    if (c.b.x < minx) minx = c.b.x;
+    if (c.b.y < miny) miny = c.b.y;
+    if (c.b.x > maxx) maxx = c.b.x;
+    if (c.b.y > maxy) maxy = c.b.y;
+  }
+  const bbw = Math.max(maxx - minx, 1e-6);
+  const bbh = Math.max(maxy - miny, 1e-6);
   const scale = Math.min(play.w / bbw, play.h / bbh) * 0.92;
-  const ox = play.x + (play.w - bbw * scale) / 2 - bb.minx * scale;
-  const oy = play.y + (play.h - bbh * scale) / 2 - bb.miny * scale;
+  const ox = play.x + (play.w - bbw * scale) / 2 - minx * scale;
+  const oy = play.y + (play.h - bbh * scale) / 2 - miny * scale;
   return { scale, ox, oy, play, ghost };
 }
 
@@ -221,6 +239,10 @@ function getPaperGradient(ctx: CanvasRenderingContext2D, flip: boolean): CanvasG
   return g;
 }
 
+let deskW = -1;
+let deskH = -1;
+let deskGrad: CanvasGradient | null = null;
+
 let vigW = -1;
 let vigH = -1;
 let vigGrad: CanvasGradient | null = null;
@@ -250,10 +272,17 @@ function getVignette(ctx: CanvasRenderingContext2D, w: number, h: number): Canva
  * one continuous light.
  */
 export function paintDesk(ctx: CanvasRenderingContext2D, w: number, h: number): void {
-  const bg = ctx.createLinearGradient(0, 0, 0, h);
-  bg.addColorStop(0, '#f6f0e2');
-  bg.addColorStop(1, '#eadfc9');
-  ctx.fillStyle = bg;
+  // The falloff gradient depends only on the viewport size — cache it like the
+  // vignette instead of allocating a new CanvasGradient every frame.
+  if (!deskGrad || deskW !== w || deskH !== h) {
+    deskW = w;
+    deskH = h;
+    const bg = ctx.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#f6f0e2');
+    bg.addColorStop(1, '#eadfc9');
+    deskGrad = bg;
+  }
+  ctx.fillStyle = deskGrad;
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = getVignette(ctx, w, h);
   ctx.fillRect(0, 0, w, h);
@@ -264,11 +293,13 @@ export function paintDesk(ctx: CanvasRenderingContext2D, w: number, h: number): 
 // ---------------------------------------------------------------------------
 
 function tracePoly(ctx: CanvasRenderingContext2D, v: View, poly: Pt[]): void {
-  const p0 = toScreen(v, poly[0]);
-  ctx.moveTo(p0.x, p0.y);
+  // Inline the view transform so tracing a path allocates no Pt objects.
+  const s = v.scale;
+  const ox = v.ox;
+  const oy = v.oy;
+  ctx.moveTo(poly[0].x * s + ox, poly[0].y * s + oy);
   for (let i = 1; i < poly.length; i++) {
-    const p = toScreen(v, poly[i]);
-    ctx.lineTo(p.x, p.y);
+    ctx.lineTo(poly[i].x * s + ox, poly[i].y * s + oy);
   }
   ctx.closePath();
 }
@@ -285,16 +316,20 @@ function drawLayer(
 ): void {
   // Screen-space bbox for the lighting gradient and the curl band, computed
   // inline (no allocation).
+  const vs = v.scale;
+  const vox = v.ox;
+  const voy = v.oy;
   let bx0 = Infinity;
   let by0 = Infinity;
   let bx1 = -Infinity;
   let by1 = -Infinity;
   for (const p of layer.poly) {
-    const s = toScreen(v, p);
-    if (s.x < bx0) bx0 = s.x;
-    if (s.y < by0) by0 = s.y;
-    if (s.x > bx1) bx1 = s.x;
-    if (s.y > by1) by1 = s.y;
+    const sx = p.x * vs + vox;
+    const sy = p.y * vs + voy;
+    if (sx < bx0) bx0 = sx;
+    if (sy < by0) by0 = sy;
+    if (sx > bx1) bx1 = sx;
+    if (sy > by1) by1 = sy;
   }
   const bw = bx1 - bx0;
   const bh = by1 - by0;
@@ -501,6 +536,21 @@ function drawHintArrow(
 // Main scene render
 // ---------------------------------------------------------------------------
 
+// Paper states are treated as immutable (fold/undo/reset always swap in a
+// different state object), so the z-sorted stationary layer list can be
+// memoized by reference instead of being re-allocated and re-sorted on every
+// frame between fold commits.
+let stationaryFor: PaperState | null = null;
+let stationaryCache: Layer[] = [];
+
+function zSortedLayers(state: PaperState): Layer[] {
+  if (stationaryFor !== state) {
+    stationaryFor = state;
+    stationaryCache = state.layers.slice().sort((a, b) => a.z - b.z);
+  }
+  return stationaryCache;
+}
+
 export function renderScene(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -531,9 +581,7 @@ export function renderScene(
 
   // Which layers are stationary right now (during an animation the moving
   // ones are drawn separately with interpolation).
-  const stationary = scene.anim
-    ? scene.anim.kept
-    : state.layers.slice().sort((a, b) => a.z - b.z);
+  const stationary = scene.anim ? scene.anim.kept : zSortedLayers(state);
 
   // Soft shadow under the whole sheet, falling down-right away from the
   // top-left key light.
@@ -635,23 +683,30 @@ function aoBand(
   ctx.clip();
   ctx.lineWidth = band;
   const fade = 'rgba(74, 52, 28, 0)';
+  const vs = v.scale;
+  const vox = v.ox;
+  const voy = v.oy;
   for (let j = 0; j < boundary.length; j++) {
-    const a = toScreen(v, boundary[j]);
-    const b = toScreen(v, boundary[(j + 1) % boundary.length]);
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
+    const pa = boundary[j];
+    const pb = boundary[(j + 1) % boundary.length];
+    const ax = pa.x * vs + vox;
+    const ay = pa.y * vs + voy;
+    const bx = pb.x * vs + vox;
+    const by = pb.y * vs + voy;
+    const dx = bx - ax;
+    const dy = by - ay;
     const len = Math.hypot(dx, dy);
     if (len < 2) continue;
     const enx = (-dy / len) * band;
     const eny = (dx / len) * band;
-    const g = ctx.createLinearGradient(a.x - enx, a.y - eny, a.x + enx, a.y + eny);
+    const g = ctx.createLinearGradient(ax - enx, ay - eny, ax + enx, ay + eny);
     g.addColorStop(0, fade);
     g.addColorStop(0.5, color);
     g.addColorStop(1, fade);
     ctx.strokeStyle = g;
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(bx, by);
     ctx.stroke();
   }
   ctx.restore();
@@ -881,7 +936,9 @@ function drawGhostPanel(
   ctx.stroke();
   ctx.setLineDash([]);
 
-  ctx.fillStyle = '#8a7358';
+  // Matches the stylesheet's --muted (#7d6a4c): deep enough for 4.5:1 on the
+  // panel background at 14px.
+  ctx.fillStyle = '#7d6a4c';
   ctx.font = '600 14px system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';

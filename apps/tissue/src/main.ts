@@ -504,7 +504,9 @@ const ui = new UI({
     save = withSkin(save, index);
     void platform.save(save);
     applySkin();
-    ui.showMenu(save);
+    // Keep the Icarus Score line: showMenu hides it when the score arg is
+    // omitted (goToMenu passes it; this path must too).
+    ui.showMenu(save, icarusScore(profile));
   },
 });
 

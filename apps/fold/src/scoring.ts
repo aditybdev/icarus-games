@@ -137,6 +137,16 @@ export function flawlessStreak(stars: readonly number[], levelIndex: number): nu
   return n;
 }
 
+/**
+ * True when every level has been completed at least once (any star rating).
+ * Drives the "collection complete" acknowledgment on the results card and
+ * the levels screen, so a player who finishes the final level gets an
+ * explicit signal that there is no more content.
+ */
+export function allComplete(save: SaveData): boolean {
+  return save.stars.length > 0 && save.stars.every((s) => s > 0);
+}
+
 export interface GalleryCard {
   unlocked: boolean;
   stars: number;

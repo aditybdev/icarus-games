@@ -54,6 +54,7 @@ import {
   type Order,
 } from './core/orders';
 import {
+  canDispense,
   createCombo,
   createTurbo,
   heightToCm,
@@ -490,7 +491,9 @@ function resumeGame(): void {
 /* -------------------------------- update -------------------------------- */
 
 function updatePlaying(dt: number): void {
-  const wantsDispense = input.dispensing && height < MAX_HEIGHT;
+  // Free Swirl keeps dispensing at MAX_HEIGHT so the turbo overdrive and the
+  // dead-zone combo stay reachable (see canDispense). Rush caps at max.
+  const wantsDispense = canDispense(mode === 'free', input.dispensing, height);
   if (wantsDispense && !dispensing) {
     audio.unlock();
     audio.startDispense();
@@ -503,8 +506,11 @@ function updatePlaying(dt: number): void {
 
   const offset = world.coneX; // nozzle is fixed at x = 0
   if (dispensing) {
-    height = Math.min(MAX_HEIGHT, height + GROW_RATE * dt);
-    swirlDirty = true;
+    const nextHeight = Math.min(MAX_HEIGHT, height + GROW_RATE * dt);
+    // Parked at max height the shape no longer changes — don't schedule
+    // identical tube rebuilds 11x/sec.
+    if (nextHeight !== height) swirlDirty = true;
+    height = nextHeight;
   }
   // Combo streak: time dispensing inside the dead zone builds the multiplier.
   combo = updateCombo(combo, dt, dispensing && Math.abs(offset) <= CENTER_DEAD_ZONE);
