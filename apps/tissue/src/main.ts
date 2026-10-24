@@ -532,6 +532,16 @@ function bindTutorial(): void {
       void platform.save(save);
     }
   });
+  // Playables design SHOULD: Esc closes dialogs — reuse the buttons' own
+  // handlers so persistence and audio stay identical.
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!overlay.hidden) {
+      document.getElementById('btn-tutorial-got')!.click();
+    } else if (!document.getElementById('screen-settings')!.hidden) {
+      document.getElementById('btn-settings-close')!.click();
+    }
+  });
 }
 
 /** Settings overlay: three toggles mirrored into the save and the profile. */

@@ -226,6 +226,16 @@ export class Game {
         void this.platform.save(this.save);
       }
     });
+    // Playables design SHOULD: Esc closes dialogs — reuse the buttons' own
+    // handlers so persistence and audio stay identical.
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!overlay.hidden) {
+        document.getElementById('btn-tutorial-got')!.click();
+      } else if (!document.getElementById('screen-settings')!.hidden) {
+        document.getElementById('btn-settings-close')!.click();
+      }
+    });
   }
 
   private showTutorial(): void {
