@@ -558,6 +558,11 @@ const SIBLING_TABLE: Record<string, SiblingPitch[]> = {
     { id: 'frenzy', name: 'Four-Leg Frenzy', pitch: 'four legs, zero coordination' },
     { id: 'fold', name: 'Fold', pitch: 'a calm origami puzzle — 30 paper folds' },
   ],
+  tap57: [
+    { id: 'swirl', name: 'Swirl!', pitch: 'stack the tallest soft-serve tower' },
+    { id: 'tissue', name: 'Tissue Rush', pitch: 'a 60-second speed fix' },
+    { id: 'frenzy', name: 'Four-Leg Frenzy', pitch: 'the funniest 50 m you will run' },
+  ],
 };
 
 /** The sibling pitch for a game today — rotates daily, same for everyone. */

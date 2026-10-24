@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Tap the 57</title>
+    <meta
+      name="description"
+      content="Rhythm-tap the ketchup bottle's sweet spot, then aim the squirt. Don't get greedy."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='11' y='8' width='10' height='20' rx='3' fill='%23d9381e'/%3E%3Crect x='13' y='3' width='6' height='6' rx='1' fill='%23a82310'/%3E%3C/svg%3E"
+    />
+    <!-- YouTube Playables SDK (cert-mandated; cannot be self-hosted/SRI'd) -->
+    <script src="https://www.youtube.com/game_api/v1"></script>
+    <style>
+      :root {
+        --cream: #f7e9d2;
+        --counter: #e8d3ae;
+        --ketchup: #d9381e;
+        --ketchup-dark: #a82310;
+        --pickle: #5b8c5a;
+        --ink: #4a2c1a;
+        --ink-soft: #8a6a50;
+        --card: #fffaf0;
+        --gold: #e8a020;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body {
+        height: 100%;
+        overflow: hidden;
+        background: var(--cream);
+        font-family: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, sans-serif;
+        color: var(--ink);
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #stage { position: fixed; inset: 0; touch-action: none; }
+      #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+      /* ------------------------------ screens ------------------------------ */
+      .screen {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: calc(env(safe-area-inset-top, 0px) + 18px) 18px
+          calc(env(safe-area-inset-bottom, 0px) + 18px);
+        background: rgba(247, 233, 210, 0.82);
+        backdrop-filter: blur(3px);
+        z-index: 20;
+        animation: screen-in 0.18s ease-out;
+        text-align: center;
+      }
+      @keyframes screen-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .screen { animation: none; }
+      }
+      body.reduced-motion .screen { animation: none; }
+      [hidden] { display: none !important; }
+
+      /* Pause: freeze the diner behind, but overlays must keep animating
+         (their entrance runs when pause begins — freezing it would leave the
+         pause screen invisible at opacity 0). */
+      body.paused * { animation-play-state: paused !important; }
+      body.paused .screen, body.paused .screen *,
+      body.paused .screen *::before, body.paused .screen *::after {
+        animation-play-state: running !important;
+      }
+
+      .card {
+        width: min(92vw, 380px);
+        background: var(--card);
+        border: 3px solid var(--ink);
+        border-radius: 22px;
+        padding: 20px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-shadow: 0 6px 0 rgba(74, 44, 26, 0.25);
+      }
+      h1 {
+        font-size: clamp(34px, 9vw, 44px);
+        letter-spacing: 0.5px;
+        color: var(--ketchup);
+        text-shadow: 0 3px 0 rgba(168, 35, 16, 0.2);
+      }
+      .tagline { font-size: 15px; color: var(--ink-soft); margin-top: -8px; }
+      h2 { font-size: 26px; color: var(--ketchup-dark); }
+      .sub { font-size: 14px; color: var(--ink-soft); }
+
+      .btn {
+        appearance: none;
+        border: 3px solid var(--ink);
+        border-radius: 16px;
+        background: var(--ketchup);
+        color: #fff;
+        font: inherit;
+        font-weight: 700;
+        font-size: 19px;
+        padding: 13px 18px;
+        min-height: 48px;
+        min-width: 48px;
+        cursor: pointer;
+        box-shadow: 0 4px 0 var(--ketchup-dark);
+        transition: transform 0.06s ease;
+      }
+      .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ketchup-dark); }
+      .btn.secondary {
+        background: var(--card);
+        color: var(--ink);
+        box-shadow: 0 4px 0 rgba(74, 44, 26, 0.35);
+        font-size: 16px;
+      }
+      .btn.secondary:active { box-shadow: 0 1px 0 rgba(74, 44, 26, 0.35); }
+      .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+      .icon-btn {
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 10px);
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 3px solid var(--ink);
+        background: var(--card);
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 30;
+      }
+
+      /* -------------------------------- HUD -------------------------------- */
+      #hud {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 5;
+      }
+      .chip {
+        position: absolute;
+        background: var(--card);
+        border: 2.5px solid var(--ink);
+        border-radius: 999px;
+        padding: 7px 14px;
+        font-weight: 700;
+        font-size: 15px;
+        box-shadow: 0 3px 0 rgba(74, 44, 26, 0.2);
+      }
+      #order-chip { top: calc(env(safe-area-inset-top, 0px) + 12px); left: 12px; max-width: 62vw; }
+      #score-chip { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 64px; color: var(--ketchup-dark); }
+      #btn-pause { right: 10px; pointer-events: auto; }
+      #hint {
+        position: absolute;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 15%);
+        transform: translateX(-50%);
+        background: var(--ink);
+        color: var(--cream);
+        padding: 9px 18px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 16px;
+        pointer-events: none;
+        z-index: 6;
+        animation: hint-bob 1.2s ease-in-out infinite;
+      }
+      @keyframes hint-bob {
+        0%, 100% { transform: translateX(-50%) translateY(0); }
+        50% { transform: translateX(-50%) translateY(-6px); }
+      }
+      body.reduced-motion #hint { animation: none; }
+      #toast {
+        position: absolute;
+        left: 50%;
+        top: 22%;
+        transform: translateX(-50%);
+        background: var(--ink);
+        color: var(--cream);
+        padding: 10px 20px;
+        border-radius: 14px;
+        font-weight: 700;
+        font-size: 17px;
+        z-index: 25;
+        pointer-events: none;
+      }
+
+      /* ------------------------------- title ------------------------------- */
+      .best-line { font-size: 16px; font-weight: 700; }
+      .daily-line { font-size: 14px; color: var(--pickle); font-weight: 700; min-height: 18px; }
+      .menu-stats { font-size: 13px; color: var(--ink-soft); }
+      .score-line { font-size: 13px; color: var(--gold); font-weight: 700; }
+      .promo-line { font-size: 12.5px; color: var(--ink-soft); }
+      .bottle-row { display: flex; gap: 12px; justify-content: center; }
+      .bottle-dot {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        border: 3px solid var(--ink);
+        background: var(--card);
+        cursor: pointer;
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .bottle-dot .swatch {
+        width: 100%;
+        height: 62%;
+        border-radius: 4px 4px 0 0;
+      }
+      .bottle-dot.sel { outline: 3px solid var(--gold); }
+      .bottle-dot.locked { opacity: 0.45; cursor: default; }
+      .bottle-dot.locked::after {
+        content: '🔒';
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+      }
+
+      /* ------------------------------ results ------------------------------ */
+      #results-score {
+        font-size: clamp(46px, 13vw, 64px);
+        font-weight: 800;
+        color: var(--ketchup);
+        line-height: 1;
+      }
+      #results-medal { font-size: 22px; font-weight: 800; min-height: 28px; }
+      #results-medal.gold { color: var(--gold); }
+      #results-medal.silver { color: #9a9a9a; }
+      #results-medal.bronze { color: #b0793a; }
+      #results-near { font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+      #results-best { font-size: 14px; color: var(--pickle); font-weight: 700; }
+      #results-orders { display: flex; gap: 7px; justify-content: center; flex-wrap: wrap; }
+      .order-badge {
+        background: var(--card);
+        border: 2px solid var(--ink);
+        border-radius: 10px;
+        padding: 5px 9px;
+        font-size: 12.5px;
+        font-weight: 700;
+      }
+      .order-badge.plated { background: #ffe9b8; border-color: var(--gold); }
+      .order-badge.splat { background: #ffd9d2; border-color: var(--ketchup-dark); }
+      #results-stats { font-size: 13px; color: var(--ink-soft); }
+      #results-daily { font-size: 14px; color: var(--pickle); font-weight: 700; min-height: 18px; }
+
+      /* ------------------------------ settings ------------------------------ */
+      .set-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        font-size: 17px;
+        font-weight: 700;
+        min-height: 44px;
+      }
+      .set-row input { width: 26px; height: 26px; accent-color: var(--ketchup); }
+
+      .howto-step { display: flex; gap: 10px; align-items: center; text-align: left; font-size: 15.5px; }
+      .howto-step .emo { font-size: 24px; }
+
+      .btn:focus-visible, .icon-btn:focus-visible, .bottle-dot:focus-visible,
+      .set-row input:focus-visible {
+        outline: 3px solid var(--ketchup);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+
+    <div id="hud" hidden>
+      <div id="order-chip" class="chip">Order 1/5</div>
+      <div id="score-chip" class="chip">0</div>
+      <button id="btn-pause" class="icon-btn" aria-label="Pause">⏸</button>
+    </div>
+    <div id="hint" hidden></div>
+    <div id="toast" hidden role="status" aria-live="polite"></div>
+
+    <div id="screen-title" class="screen">
+      <div class="card">
+        <h1>Tap the 57</h1>
+        <p class="tagline">The bottle won't pour. You know the trick.</p>
+        <p id="best-line" class="best-line">No rushes yet — the fries are waiting</p>
+        <p id="daily-line" class="daily-line"></p>
+        <div class="btn-row">
+          <button id="btn-play" class="btn">Start a Rush</button>
+        </div>
+        <div class="btn-row">
+          <button id="btn-daily" class="btn secondary">Daily Diner</button>
+          <button id="btn-howto" class="btn secondary" aria-label="How to play">?</button>
+          <button id="btn-settings" class="btn secondary" aria-label="Settings">⚙</button>
+        </div>
+        <div id="bottle-row" class="bottle-row" role="group" aria-label="Condiment collection"></div>
+        <p id="menu-stats" class="menu-stats" hidden></p>
+        <p id="score-line" class="score-line" hidden></p>
+        <p id="promo-line" class="promo-line"></p>
+      </div>
+    </div>
+
+    <div id="screen-results" class="screen" hidden>
+      <div class="card">
+        <h2 id="results-title">Rush complete!</h2>
+        <div id="results-score">0</div>
+        <div id="results-medal"></div>
+        <p id="results-near"></p>
+        <p id="results-best"></p>
+        <div id="results-orders"></div>
+        <p id="results-stats"></p>
+        <p id="results-daily"></p>
+        <div class="btn-row">
+          <button id="btn-replay" class="btn">Rush again</button>
+          <button id="btn-menu" class="btn secondary">Menu</button>
+        </div>
+        <p id="results-promo" class="promo-line"></p>
+      </div>
+    </div>
+
+    <div id="screen-pause" class="screen" hidden>
+      <div class="card">
+        <h2>Paused</h2>
+        <div class="btn-row"><button id="btn-resume" class="btn">Resume</button></div>
+        <div class="btn-row">
+          <button id="btn-pause-restart" class="btn secondary">Restart</button>
+          <button id="btn-pause-settings" class="btn secondary">⚙</button>
+          <button id="btn-pause-menu" class="btn secondary">Menu</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-settings" class="screen" hidden>
+      <div class="card">
+        <h2>Settings</h2>
+        <label class="set-row">Sound <input id="set-sfx" type="checkbox" checked /></label>
+        <label class="set-row">Haptics <input id="set-haptics" type="checkbox" checked /></label>
+        <label class="set-row">Reduce motion <input id="set-motion" type="checkbox" /></label>
+        <div class="btn-row"><button id="btn-settings-close" class="btn">Done</button></div>
+      </div>
+    </div>
+
+    <div id="screen-tutorial" class="screen" hidden>
+      <div class="card">
+        <h2>How to play</h2>
+        <div class="howto-step"><span class="emo">👆</span><span>Tap the 57 mark in rhythm with the ring to build pressure.</span></div>
+        <div class="howto-step"><span class="emo">🎯</span><span>Watch the landing dot — stop when it sits on the food.</span></div>
+        <div class="howto-step"><span class="emo">💦</span><span>Drag to aim, let go to squirt. Too much pressure… SPLAT.</span></div>
+        <div class="btn-row"><button id="btn-tutorial-got" class="btn">Got it</button></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

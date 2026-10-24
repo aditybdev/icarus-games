@@ -89,7 +89,7 @@ noise-only — trust longtasks/heap + 4× throttle runs).
 | Four-Leg Frenzy | verified P1-P7 | verified U1-U8 | verified S1-S8 | verified T1,T2,T4-T8 | — | T3 pending; rank ladder S/A/B/C = 3-tier+ |
 | Tissue Rush | verified P1-P7 | verified U1-U8 | verified S1-S8 | verified T1,T2,T4-T8 | — | T3 pending; medal attainability math proven 2026-10-24 |
 | Skim | verified P1-P7 | verified U1-U8 | verified S1-S8 | verified T1,T2,T4-T8 | — | T3 pending device trace; S2 sweep-calibrated (const-q runs: q0.3→41-70m, q0.5→62-106m, q0.85→162-268m vs medals 30/75/150); P5: contact-window freeze = hit-stop analog, stone squash 0.82, shake+rotation on sink only; S3: throw 10-60s skill-scaled (fail-fast pattern), daily 3 throws ≈2-4min anchor; S5: no stages — in-run window decay is the ramp |
-| Tap the 57 | — | — | — | — | /29 | acceptance record at ship |
+| Tap the 57 | verified P1-P7 | verified U1-U8 | verified S1-S8 | verified T1,T2,T4-T8 | — | T3 pending device trace; S2 bot-calibrated (perfect 498, strong ~490, decent ~317, sloppy ~106 vs medals 180/300/420); P5: splat judge-beat = hit-stop analog, blob parametric by design (never fluid-simmed); S5: 5-order book is the ramp (farther → hotter → moving); build-phase landing dot added after calibration exposed tap-quantization overshoot |
 | Golden Mallow | — | — | — | — | /29 | acceptance record at ship |
 | Pop the Lid | — | — | — | — | /29 | acceptance record at ship |
 
