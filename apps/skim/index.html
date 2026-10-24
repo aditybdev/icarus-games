@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Skim — Icarus Games</title>
+    <meta name="description" content="Flick a stone, tap each splash, and chain skips across the lake. How far can you skim?" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cellipse cx='16' cy='20' rx='11' ry='6' fill='%235b7a8c'/%3E%3Cellipse cx='16' cy='17' rx='10' ry='5' fill='%238d9299'/%3E%3C/svg%3E" />
+    <script src="https://www.youtube.com/game_api/v1"></script>
+    <style>
+      :root {
+        --sky: #bfe6f5;
+        --lake: #2e7d9b;
+        --lake-deep: #1d5b74;
+        --sand: #f5e3c2;
+        --card: rgba(255, 253, 248, 0.95);
+        --ink: #16394a;
+        --ink-soft: #456d80;
+        --teal: #1f8fa8;
+        --teal-deep: #156b80;
+        --gold: #e8a020;
+        --gold-deep: #b87e10;
+        --shadow: 0 10px 30px rgba(22, 72, 96, 0.22);
+        --sat: env(safe-area-inset-top, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+      /* Keyboard-only focus ring (never shows for pointer/touch). */
+      :focus-visible {
+        outline: 3px solid var(--lake-deep);
+        outline-offset: 2px;
+      }
+
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
+        background: var(--sky);
+        color: var(--ink);
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      #stage { position: fixed; inset: 0; }
+      #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+      /* ------------------------------ screens ------------------------------ */
+      .screen {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: calc(20px + var(--sat)) 24px calc(24px + var(--sab));
+        animation: screen-in 0.18s ease-out;
+      }
+      @keyframes screen-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: none; }
+      }
+      [hidden] { display: none !important; }
+
+      /* Pause: freeze the lake behind, but overlays must keep animating
+         (their entrance runs when pause begins — freezing it would leave the
+         pause screen invisible at opacity 0). */
+      body.paused * { animation-play-state: paused !important; }
+      body.paused .screen, body.paused .screen *,
+      body.paused .screen *::before, body.paused .screen *::after {
+        animation-play-state: running !important;
+      }
+
+      .card {
+        background: var(--card);
+        border-radius: 26px;
+        box-shadow: var(--shadow);
+        padding: 26px 26px 22px;
+        width: min(92vw, 400px);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        backdrop-filter: blur(8px);
+      }
+
+      h1.logo {
+        font-size: clamp(3rem, 13vw, 4.6rem);
+        font-weight: 900;
+        letter-spacing: 0.02em;
+        color: var(--lake-deep);
+        text-shadow: 0 3px 0 rgba(255,255,255,0.7);
+      }
+      h1.logo .skim-o { color: var(--teal); }
+      .tagline {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--ink-soft);
+        text-align: center;
+        margin-top: -8px;
+      }
+
+      .btn {
+        appearance: none;
+        border: 0;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 800;
+        color: #fff;
+        background: var(--teal);
+        border-radius: 18px;
+        padding: 14px 26px;
+        font-size: 1.05rem;
+        min-width: min(70vw, 260px);
+        min-height: 48px;
+        box-shadow: 0 5px 0 var(--teal-deep), 0 8px 16px rgba(21, 107, 128, 0.35);
+        transition: transform 0.06s ease, box-shadow 0.06s ease;
+      }
+      .btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--teal-deep); }
+      .btn.secondary {
+        background: #7d94a3;
+        box-shadow: 0 5px 0 #5e7482, 0 8px 14px rgba(0,0,0,0.18);
+      }
+      .btn.secondary:active { box-shadow: 0 1px 0 #5e7482; }
+      .btn.gold {
+        background: var(--gold);
+        box-shadow: 0 5px 0 var(--gold-deep), 0 8px 16px rgba(184, 126, 16, 0.35);
+      }
+      .btn.gold:active { box-shadow: 0 1px 0 var(--gold-deep); }
+      .btn.small { min-width: 0; padding: 10px 18px; font-size: 0.95rem; }
+
+      .icon-btn {
+        appearance: none;
+        border: 0;
+        cursor: pointer;
+        width: 46px;
+        height: 46px;
+        border-radius: 14px;
+        background: rgba(255, 253, 248, 0.9);
+        box-shadow: 0 3px 10px rgba(22, 72, 96, 0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .icon-btn svg { width: 22px; height: 22px; fill: var(--ink); }
+
+      /* ------------------------------ title ------------------------------ */
+      #screen-title { justify-content: flex-end; padding-bottom: calc(20px + var(--sab)); gap: 10px; }
+      #screen-title .card { gap: 10px; }
+      #best-line, #daily-line {
+        font-size: 0.92rem;
+        font-weight: 800;
+        color: var(--ink-soft);
+        min-height: 18px;
+      }
+      #daily-line { color: #8a6410; }
+      #menu-stats { font-size: 0.85rem; font-weight: 700; color: var(--ink-soft); }
+      #score-line { font-size: 0.9rem; font-weight: 800; color: #2b6e45; min-height: 18px; }
+      #promo-line { font-size: 0.85rem; font-weight: 700; color: #54707f; text-align: center; }
+
+      #stone-row { display: flex; gap: 12px; align-items: center; justify-content: center; }
+      .stone-dot {
+        appearance: none;
+        border: 3px solid transparent;
+        cursor: pointer;
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: var(--card);
+        box-shadow: 0 3px 8px rgba(22, 72, 96, 0.25);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+      }
+      .stone-dot.selected { border-color: var(--teal); }
+      .stone-dot.locked { opacity: 0.55; filter: grayscale(0.8); }
+      .stone-dot .pebble {
+        width: 30px;
+        height: 20px;
+        border-radius: 50%;
+        display: block;
+      }
+
+      /* ------------------------------ HUD ------------------------------ */
+      #hud {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 5;
+      }
+      .chip {
+        position: absolute;
+        background: rgba(255, 253, 248, 0.92);
+        border-radius: 999px;
+        padding: 8px 16px;
+        font-weight: 800;
+        font-size: 1rem;
+        color: var(--ink);
+        box-shadow: 0 3px 10px rgba(22, 72, 96, 0.25);
+        white-space: nowrap;
+      }
+      #dist-chip {
+        top: calc(var(--sat) + 12px);
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 1.15rem;
+      }
+      #chain-chip {
+        top: calc(var(--sat) + 58px);
+        left: 50%;
+        transform: translateX(-50%);
+        color: var(--gold-deep);
+        font-size: 0.95rem;
+      }
+      #chain-chip.bump { animation: bump 0.25s ease-out; }
+      @keyframes bump {
+        0% { transform: translateX(-50%) scale(1); }
+        40% { transform: translateX(-50%) scale(1.18); }
+        100% { transform: translateX(-50%) scale(1); }
+      }
+      #daily-progress-chip {
+        top: calc(var(--sat) + 12px);
+        left: 12px;
+        font-size: 0.9rem;
+      }
+      #hud .icon-btn {
+        position: absolute;
+        top: calc(var(--sat) + 10px);
+        right: 12px;
+        pointer-events: auto;
+      }
+
+      /* In-play gesture hints (teach inside play, one at a time). */
+      #hint {
+        position: absolute;
+        left: 50%;
+        bottom: calc(24% + var(--sab));
+        transform: translateX(-50%);
+        font-size: 1.3rem;
+        font-weight: 900;
+        color: #fff;
+        text-shadow: 0 2px 8px rgba(13, 60, 82, 0.7);
+        pointer-events: none;
+        animation: hint-pulse 1.1s ease-in-out infinite;
+        white-space: nowrap;
+      }
+      @keyframes hint-pulse {
+        0%, 100% { opacity: 0.65; transform: translateX(-50%) scale(1); }
+        50% { opacity: 1; transform: translateX(-50%) scale(1.06); }
+      }
+
+      /* ------------------------------ results ------------------------------ */
+      #results-title { font-size: 1.6rem; font-weight: 900; color: var(--lake-deep); }
+      #results-medal { font-size: 1.05rem; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+      #results-medal.bronze { color: #a5713d; }
+      #results-medal.silver { color: #5f7a8c; }
+      #results-medal.gold { color: var(--gold-deep); }
+      #results-dist { font-size: clamp(2.6rem, 12vw, 3.6rem); font-weight: 900; color: var(--ink); line-height: 1; }
+      #results-near { font-size: 0.95rem; font-weight: 800; color: var(--teal-deep); min-height: 20px; }
+      #results-best { font-size: 0.95rem; font-weight: 800; color: var(--ink-soft); }
+      #results-best.new-best { color: #c2456e; }
+      #results-stats { font-size: 0.9rem; font-weight: 700; color: var(--ink-soft); }
+      #results-daily { font-size: 0.9rem; font-weight: 800; color: #8a6410; }
+      #results-promo { font-size: 0.85rem; font-weight: 700; color: #54707f; text-align: center; }
+      .row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+      /* ------------------------------ overlays ------------------------------ */
+      #screen-pause, #screen-settings, #screen-tutorial {
+        background: rgba(22, 57, 74, 0.45);
+        backdrop-filter: blur(6px);
+        z-index: 20;
+      }
+      .overlay-title { font-size: 1.4rem; font-weight: 900; color: var(--lake-deep); }
+
+      .setrow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        font-weight: 800;
+        font-size: 1rem;
+        padding: 6px 2px;
+      }
+      .setrow input[type="checkbox"] {
+        appearance: none;
+        width: 52px;
+        height: 30px;
+        border-radius: 999px;
+        background: #b9c9d2;
+        position: relative;
+        cursor: pointer;
+        transition: background 0.15s ease;
+        flex-shrink: 0;
+      }
+      .setrow input[type="checkbox"]:checked { background: var(--teal); }
+      .setrow input[type="checkbox"]::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.25);
+        transition: left 0.15s ease;
+      }
+      .setrow input[type="checkbox"]:checked::after { left: 25px; }
+
+      .howto-list {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        font-size: 0.98rem;
+        font-weight: 700;
+        color: var(--ink);
+        text-align: left;
+        width: 100%;
+      }
+      .howto-list li { padding-left: 4px; }
+
+      #toast {
+        position: absolute;
+        top: calc(var(--sat) + 110px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(22, 57, 74, 0.9);
+        color: #fff;
+        font-weight: 800;
+        font-size: 0.95rem;
+        border-radius: 999px;
+        padding: 10px 20px;
+        z-index: 30;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+
+      @media (min-aspect-ratio: 1/1) {
+        h1.logo { font-size: clamp(2.2rem, 8vh, 3.4rem); }
+        .card { padding: 18px 22px 16px; gap: 8px; }
+        .btn { padding: 10px 22px; min-height: 44px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="hud" hidden>
+        <div id="dist-chip" class="chip">0.0 m</div>
+        <div id="chain-chip" class="chip" hidden></div>
+        <div id="daily-progress-chip" class="chip" hidden></div>
+        <button id="btn-pause" class="icon-btn" type="button" aria-label="Pause">
+          <svg viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+        </button>
+      </div>
+
+      <div id="hint" hidden></div>
+      <div id="toast" role="status" aria-live="polite" hidden></div>
+
+      <div id="screen-title" class="screen">
+        <h1 class="logo">Sk<span class="skim-o">i</span>m</h1>
+        <p class="tagline">Flick. Tap. Skip. How far can you skim a stone?</p>
+        <div class="card">
+          <p id="best-line"></p>
+          <p id="daily-line"></p>
+          <button id="btn-play" class="btn gold btn-big" type="button">Play</button>
+          <button id="btn-daily" class="btn btn-big" type="button">Daily Skip</button>
+          <div id="stone-row" role="group" aria-label="Stones"></div>
+          <p id="menu-stats" hidden></p>
+          <p id="score-line" hidden></p>
+          <button id="btn-howto" class="btn secondary small" type="button">How to play</button>
+          <button id="btn-settings" class="btn secondary small" type="button">Settings</button>
+          <p id="promo-line"></p>
+        </div>
+      </div>
+
+      <div id="screen-results" class="screen" hidden>
+        <div class="card">
+          <h2 id="results-title">Nice skim!</h2>
+          <p id="results-medal" hidden></p>
+          <p id="results-dist">0.0 m</p>
+          <p id="results-near"></p>
+          <p id="results-best"></p>
+          <p id="results-stats"></p>
+          <p id="results-daily" hidden></p>
+          <p id="results-promo"></p>
+          <div class="row">
+            <button id="btn-replay" class="btn gold" type="button">Throw again</button>
+            <button id="btn-results-menu" class="btn secondary" type="button">Menu</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="screen-pause" class="screen" hidden>
+        <div class="card">
+          <h2 class="overlay-title">Paused</h2>
+          <button id="btn-resume" class="btn" type="button">Resume</button>
+          <button id="btn-pause-restart" class="btn secondary" type="button">Restart throw</button>
+          <button id="btn-pause-settings" class="btn secondary" type="button">Settings</button>
+          <button id="btn-pause-menu" class="btn secondary" type="button">Menu</button>
+        </div>
+      </div>
+
+      <div id="screen-settings" class="screen" hidden>
+        <div class="card">
+          <h2 class="overlay-title">Settings</h2>
+          <label class="setrow">Sound <input id="set-sfx" type="checkbox" /></label>
+          <label class="setrow">Haptics <input id="set-haptics" type="checkbox" /></label>
+          <label class="setrow">Reduced motion <input id="set-motion" type="checkbox" /></label>
+          <button id="btn-settings-close" class="btn" type="button">Done</button>
+        </div>
+      </div>
+
+      <div id="screen-tutorial" class="screen" hidden>
+        <div class="card">
+          <h2 class="overlay-title">How to skim</h2>
+          <ul class="howto-list">
+            <li>Flick forward to throw the stone.</li>
+            <li>Tap the moment it splashes to keep it skipping.</li>
+            <li>Tap late and it loses speed — miss, and it sinks.</li>
+          </ul>
+          <button id="btn-tutorial-got" class="btn" type="button">Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

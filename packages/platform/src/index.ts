@@ -553,6 +553,11 @@ const SIBLING_TABLE: Record<string, SiblingPitch[]> = {
     { id: 'fold', name: 'Fold', pitch: '30 origami levels to master' },
     { id: 'swirl', name: 'Swirl!', pitch: 'how tall can you swirl?' },
   ],
+  skim: [
+    { id: 'tissue', name: 'Tissue Rush', pitch: 'empty the box as fast as you can' },
+    { id: 'frenzy', name: 'Four-Leg Frenzy', pitch: 'four legs, zero coordination' },
+    { id: 'fold', name: 'Fold', pitch: 'a calm origami puzzle — 30 paper folds' },
+  ],
 };
 
 /** The sibling pitch for a game today — rotates daily, same for everyone. */
