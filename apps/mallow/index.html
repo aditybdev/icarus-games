@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Golden Mallow</title>
+    <meta
+      name="description"
+      content="Rotate your marshmallow in the golden-brown window before it ignites. Cozy campfire timing."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='7' y='11' width='18' height='14' rx='4' fill='%23e8a832'/%3E%3Crect x='0' y='15' width='9' height='3' rx='1' fill='%23a8743a'/%3E%3C/svg%3E"
+    />
+    <!-- YouTube Playables SDK (cert-mandated; cannot be self-hosted/SRI'd) -->
+    <script src="https://www.youtube.com/game_api/v1"></script>
+    <style>
+      :root {
+        --night: #141a2e;
+        --night-soft: #1e2640;
+        --ember: #e8823a;
+        --gold: #e8a832;
+        --cream: #fdf6e8;
+        --ink: #f0e6d2;
+        --ink-soft: #b8a888;
+        --card: #232b47;
+        --card-edge: #3a4468;
+        --leaf: #7cb87c;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body {
+        height: 100%;
+        overflow: hidden;
+        background: var(--night);
+        font-family: ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, sans-serif;
+        color: var(--ink);
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #stage { position: fixed; inset: 0; touch-action: none; }
+      #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+      /* ------------------------------ screens ------------------------------ */
+      .screen {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: calc(env(safe-area-inset-top, 0px) + 18px) 18px
+          calc(env(safe-area-inset-bottom, 0px) + 18px);
+        background: rgba(20, 26, 46, 0.78);
+        backdrop-filter: blur(3px);
+        z-index: 20;
+        animation: screen-in 0.18s ease-out;
+        text-align: center;
+      }
+      @keyframes screen-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .screen { animation: none; }
+      }
+      body.reduced-motion .screen { animation: none; }
+      [hidden] { display: none !important; }
+
+      /* Pause: freeze the campfire behind, overlays keep animating. */
+      body.paused * { animation-play-state: paused !important; }
+      body.paused .screen, body.paused .screen *,
+      body.paused .screen *::before, body.paused .screen *::after {
+        animation-play-state: running !important;
+      }
+
+      .card {
+        width: min(92vw, 380px);
+        background: var(--card);
+        border: 3px solid var(--card-edge);
+        border-radius: 22px;
+        padding: 20px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35);
+      }
+      h1 {
+        font-size: clamp(32px, 8.6vw, 42px);
+        letter-spacing: 0.5px;
+        color: var(--gold);
+        text-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+      }
+      .tagline { font-size: 15px; color: var(--ink-soft); margin-top: -8px; }
+      h2 { font-size: 26px; color: var(--gold); }
+      .sub { font-size: 14px; color: var(--ink-soft); }
+
+      .btn {
+        appearance: none;
+        border: 3px solid var(--card-edge);
+        border-radius: 16px;
+        background: var(--ember);
+        color: #fff;
+        font: inherit;
+        font-weight: 700;
+        font-size: 19px;
+        padding: 13px 18px;
+        min-height: 48px;
+        min-width: 48px;
+        cursor: pointer;
+        box-shadow: 0 4px 0 #b35a20;
+        transition: transform 0.06s ease;
+      }
+      .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 #b35a20; }
+      .btn.secondary {
+        background: var(--night-soft);
+        color: var(--ink);
+        box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+        font-size: 16px;
+      }
+      .btn.secondary:active { box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4); }
+      .btn-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+      .icon-btn {
+        position: absolute;
+        top: calc(env(safe-area-inset-top, 0px) + 10px);
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        border: 3px solid var(--card-edge);
+        background: var(--card);
+        color: var(--ink);
+        font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 30;
+      }
+
+      /* -------------------------------- HUD -------------------------------- */
+      #hud { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+      .chip {
+        position: absolute;
+        background: var(--card);
+        color: var(--ink);
+        border: 2.5px solid var(--card-edge);
+        border-radius: 999px;
+        padding: 7px 14px;
+        font-weight: 700;
+        font-size: 15px;
+        box-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+      }
+      #order-chip { top: calc(env(safe-area-inset-top, 0px) + 12px); left: 12px; max-width: 62vw; }
+      #score-chip { top: calc(env(safe-area-inset-top, 0px) + 12px); right: 64px; color: var(--gold); }
+      #btn-pause { right: 10px; pointer-events: auto; }
+      #hint {
+        position: absolute;
+        left: 50%;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 15%);
+        transform: translateX(-50%);
+        background: var(--ink);
+        color: var(--night);
+        padding: 9px 18px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 16px;
+        pointer-events: none;
+        z-index: 6;
+        animation: hint-bob 1.2s ease-in-out infinite;
+      }
+      @keyframes hint-bob {
+        0%, 100% { transform: translateX(-50%) translateY(0); }
+        50% { transform: translateX(-50%) translateY(-6px); }
+      }
+      body.reduced-motion #hint { animation: none; }
+      #toast {
+        position: absolute;
+        left: 50%;
+        top: 22%;
+        transform: translateX(-50%);
+        background: var(--ink);
+        color: var(--night);
+        padding: 10px 20px;
+        border-radius: 14px;
+        font-weight: 700;
+        font-size: 17px;
+        z-index: 25;
+        pointer-events: none;
+      }
+
+      /* ------------------------------- title ------------------------------- */
+      .best-line { font-size: 16px; font-weight: 700; }
+      .daily-line { font-size: 14px; color: var(--leaf); font-weight: 700; min-height: 18px; }
+      .menu-stats { font-size: 13px; color: var(--ink-soft); }
+      .score-line { font-size: 13px; color: var(--gold); font-weight: 700; }
+      .promo-line { font-size: 12.5px; color: var(--ink-soft); }
+      .treat-row { display: flex; gap: 12px; justify-content: center; }
+      .treat-dot {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+        border: 3px solid var(--card-edge);
+        background: var(--night-soft);
+        cursor: pointer;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .treat-dot .layer { width: 70%; height: 5px; border-radius: 2px; }
+      .treat-dot.sel { outline: 3px solid var(--gold); }
+      .treat-dot.locked { opacity: 0.45; cursor: default; }
+      .treat-dot.locked::after {
+        content: '🔒';
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+      }
+
+      /* ------------------------------ results ------------------------------ */
+      #results-score { font-size: clamp(46px, 13vw, 64px); font-weight: 800; color: var(--gold); line-height: 1; }
+      #results-medal { font-size: 22px; font-weight: 800; min-height: 28px; }
+      #results-medal.gold { color: var(--gold); }
+      #results-medal.silver { color: #b8c0d8; }
+      #results-medal.bronze { color: #c89058; }
+      #results-near { font-size: 15px; font-weight: 700; color: var(--ink-soft); }
+      #results-best { font-size: 14px; color: var(--leaf); font-weight: 700; }
+      #results-orders { display: flex; gap: 7px; justify-content: center; flex-wrap: wrap; }
+      .order-badge {
+        background: var(--night-soft);
+        color: var(--ink);
+        border: 2px solid var(--card-edge);
+        border-radius: 10px;
+        padding: 5px 9px;
+        font-size: 12.5px;
+        font-weight: 700;
+      }
+      .order-badge.golden { background: #4a3a18; border-color: var(--gold); color: var(--gold); }
+      .order-badge.fail { background: #3a2020; border-color: #a85040; color: #f0a898; }
+      #results-stats { font-size: 13px; color: var(--ink-soft); }
+      #results-daily { font-size: 14px; color: var(--leaf); font-weight: 700; min-height: 18px; }
+
+      /* ------------------------------ settings ------------------------------ */
+      .set-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        font-size: 17px;
+        font-weight: 700;
+        min-height: 44px;
+      }
+      .set-row input { width: 26px; height: 26px; accent-color: var(--ember); }
+
+      .howto-step { display: flex; gap: 10px; align-items: center; text-align: left; font-size: 15.5px; }
+      .howto-step .emo { font-size: 24px; }
+
+      .btn:focus-visible, .icon-btn:focus-visible, .treat-dot:focus-visible,
+      .set-row input:focus-visible {
+        outline: 3px solid var(--gold);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+
+    <div id="hud" hidden>
+      <div id="order-chip" class="chip">Mallow 1/5</div>
+      <div id="score-chip" class="chip">0</div>
+      <button id="btn-pause" class="icon-btn" aria-label="Pause">⏸</button>
+    </div>
+    <div id="hint" hidden></div>
+    <div id="toast" hidden role="status" aria-live="polite"></div>
+
+    <div id="screen-title" class="screen">
+      <div class="card">
+        <h1>Golden Mallow</h1>
+        <p class="tagline">Golden, or on fire. Everyone has an opinion.</p>
+        <p id="best-line" class="best-line">No roasts yet — the fire is crackling</p>
+        <p id="daily-line" class="daily-line"></p>
+        <div class="btn-row">
+          <button id="btn-play" class="btn">Campfire Night</button>
+        </div>
+        <div class="btn-row">
+          <button id="btn-daily" class="btn secondary">Daily Campfire</button>
+          <button id="btn-howto" class="btn secondary" aria-label="How to play">?</button>
+          <button id="btn-settings" class="btn secondary" aria-label="Settings">⚙</button>
+        </div>
+        <div id="treat-row" class="treat-row" role="group" aria-label="S'more recipe collection"></div>
+        <p id="menu-stats" class="menu-stats" hidden></p>
+        <p id="score-line" class="score-line" hidden></p>
+        <p id="promo-line" class="promo-line"></p>
+      </div>
+    </div>
+
+    <div id="screen-results" class="screen" hidden>
+      <div class="card">
+        <h2 id="results-title">Night complete!</h2>
+        <div id="results-score">0</div>
+        <div id="results-medal"></div>
+        <p id="results-near"></p>
+        <p id="results-best"></p>
+        <div id="results-orders"></div>
+        <p id="results-stats"></p>
+        <p id="results-daily"></p>
+        <div class="btn-row">
+          <button id="btn-replay" class="btn">Roast again</button>
+          <button id="btn-menu" class="btn secondary">Menu</button>
+        </div>
+        <p id="results-promo" class="promo-line"></p>
+      </div>
+    </div>
+
+    <div id="screen-pause" class="screen" hidden>
+      <div class="card">
+        <h2>Paused</h2>
+        <div class="btn-row"><button id="btn-resume" class="btn">Resume</button></div>
+        <div class="btn-row">
+          <button id="btn-pause-restart" class="btn secondary">Restart</button>
+          <button id="btn-pause-settings" class="btn secondary">⚙</button>
+          <button id="btn-pause-menu" class="btn secondary">Menu</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-settings" class="screen" hidden>
+      <div class="card">
+        <h2>Settings</h2>
+        <label class="set-row">Sound <input id="set-sfx" type="checkbox" checked /></label>
+        <label class="set-row">Haptics <input id="set-haptics" type="checkbox" checked /></label>
+        <label class="set-row">Reduce motion <input id="set-motion" type="checkbox" /></label>
+        <div class="btn-row"><button id="btn-settings-close" class="btn">Done</button></div>
+      </div>
+    </div>
+
+    <div id="screen-tutorial" class="screen" hidden>
+      <div class="card">
+        <h2>How to play</h2>
+        <div class="howto-step"><span class="emo">🔄</span><span>Drag to rotate the mallow — toast every side evenly.</span></div>
+        <div class="howto-step"><span class="emo">🍢</span><span>Watch the color: pull inside the golden-brown window.</span></div>
+        <div class="howto-step"><span class="emo">🔥</span><span>On fire? Shake fast to save it. Tap to pull and serve.</span></div>
+        <div class="btn-row"><button id="btn-tutorial-got" class="btn">Got it</button></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
