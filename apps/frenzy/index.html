@@ -223,6 +223,12 @@
   body.paused *, body.paused *::before, body.paused *::after {
     animation-play-state: paused !important;
   }
+  /* Overlays must keep animating: their entrance runs when pause begins,
+     so freezing them would leave the pause screen invisible at opacity 0. */
+  body.paused .screen, body.paused .screen *,
+  body.paused .screen *::before, body.paused .screen *::after {
+    animation-play-state: running !important;
+  }
   </style>
 </head>
 <body>
